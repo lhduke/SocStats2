@@ -1,0 +1,162 @@
+---
+title: "Homework-01"
+author: L. Harvey 
+format: html
+editor: visual
+embed-resources: TRUE 
+---
+
+## Homework 01
+
+## Exercise 1.1: Building a Glossary
+
+For the first exercise, we were asked to build a glossary of five (5) terms from Lundberg et al.'s article, ["What Is Your Estimand?"](https://journals.sagepub.com/doi/full/10.1177/00031224211004187). The glossary is as follows:
+
+1.  **Estimand** = The “target quantity” in a quantitative study; the “thing we are estimating.” Estimands can be either theoretical or empirical. 
+
+2.  **Counterfactual** = Compares the observed results of something that did happen to the expected results if the treatment had not happened.
+
+3.  **Theoretical Estimand** = The “thing we would like to know if we had data for the full population in all factual and counterfactual worlds of interest.” The theoretical estimand possesses two components: a “unit-specific quantity” and a “target population.”
+
+4.  **Unit-Specific Quantity** = “Clarifies whether the research goal is causal, and if so, what counterfactual intervention is being considered.” The unit-specific quantity could include a “realized outcome (i.e. whether person i is employed), a “potential outcome” (i.e. whether person i would be employed if they received job training), or a “difference in potential outcomes” (i.e. the effect of job training on the employment of person i).
+
+5.  **Target Population** = Asks, “over whom or what do \[researchers\] aggregate that unit-specific quantity?”.
+
+6.  **Empirical Estimand** = Involves “only observable quantities (e.g. a difference in means in a population) by assumptions about the relationship between the data we observe and the data we do not.” (In other words: The empirical estimand only focuses on the information we received from their assignment to different experimental conditions; there are no potential outcomes included here, only empirical ones.)
+
+## Exercise 1.2: Upload the Packages
+
+```{r}
+library(tidyverse)
+library(gt)
+```
+
+## Exercise 1.3: Potential Outcomes
+
+```{r}
+# Create a data frame 
+d <- data.frame(
+  T = c(0, 0, 1, 0, 0, 1, 1, 1),
+  Y0 = c(5, 8, 5, 12, 4, 8, 4, 9),
+  Y1 = c(5, 10, 3, 13, 2, 9, 1, 13), 
+  id = LETTERS[1:8]
+)
+
+# Now, create a fancy table 
+gt(d, rowname_col = "id")
+```
+
+Per the homework assignment, the variable `T` depicts whether someone got the "treatment" or not. Now we're asked to create a new variable called `Y` that contains the observed outcomes.
+
+1.  We know that Y can only contained the **observed** outcomes from this dataset, meaning that we want to find Y from the fancy equation we learned in class on Tuesday: $Y=TY^1+(1−T)Y^0$
+2.  Thus, we create variable `Y` as follows.
+
+```{r}
+# This is our existing data frame: 
+d <- data.frame(
+  T = c(0,0,1,0,0,1,1,1), 
+  Y0 = c(5,8,5,12,4,8,4,9), 
+  Y1 = c(5,10,3,13,2,9,1,13), 
+  id = LETTERS[1:8]
+)
+
+# Set up what Y equals: 
+dtwo <- d |> 
+  mutate(Y = T * Y1 + (1 - T) * Y0)
+
+# View it to see if the new data frame (dtwo) works: 
+dtwo
+```
+
+And find the Average Treatment Effect (ATE) for this eight-person experiment.
+
+1.  Keep in mind that the "average treatment effect" is the difference between each unit's value of $Y^1$ (the group that received the treatment) and $Y^0$ (the group that received the control). Again, keep this fancy equation in mind: $Y=TY^1+(1−T)Y^0$
+2.  Thus, we use the following equation to get the ATE:
+
+```{r}
+mean(dtwo$Y[d$T == 1]) - mean(dtwo$Y[d$T == 0])
+```
+
+## Exercise 1.4: Simulations
+
+For the first part of 1.4, we're asked to "simulate a new, completely randomized experiment on those eight people," (i.e. "resample $T$ at random so that equal numbers get the treatment and the control").
+
+```{r}
+simulation <- d |> 
+  mutate(T = sample(d$T))
+```
+
+Next, we're asked to create a new variable `Y` that contains the observed outcomes:
+
+```{r}
+new_y <- d |> 
+  mutate(Y = T * Y1 + (1 - T) * Y0)
+```
+
+Next, we want to find the ATE for the eight-person experiment:
+
+```{r}
+# To ensure we get the same output every time: 
+set.seed(12345)
+
+simulation <- d |> 
+  mutate(T = sample(d$T)) |> 
+  mutate(Y = T * Y1 + (1 - T) * Y0)
+
+# Create a table to display the simulation: 
+gt(simulation, rowname_col = "id")
+
+# Now find the ATE: 
+mean(simulation$Y[d$T == 1]) - mean(simulation$Y[d$T == 0])
+```
+
+Lastly, repeat this process a couple of times and note the differences between the outputs.
+
+```{r}
+# To ensure that we get the same output every time: 
+set.seed(12345)
+
+simulation1 <- d |> 
+  mutate(T = sample(d$T)) |> 
+  mutate(Y = T * Y1 + (1 - T) * Y0)
+mean(simulation1$Y[d$T == 1]) - mean(simulation1$Y[d$T == 0])
+
+simulation2 <- d |> 
+  mutate(T = sample(d$T)) |> 
+  mutate(Y = T * Y1 + (1 - T) * Y0)
+mean(simulation2$Y[d$T == 1]) - mean(simulation2$Y[d$T == 0])
+
+simulation3 <- d |> 
+  mutate(T = sample(d$T)) |> 
+  mutate(Y = T * Y1 + (1 - T) * Y0)
+mean(simulation3$Y[d$T == 1]) - mean(simulation3$Y[d$T == 0])
+```
+
+The outputs for simulation1, simulation2, and simulation3 are 0, -1, and -2.75, respectively. This is different from our actually ATE of -0.75 in Exercise 1.3 (and the "real ATE" Andres included in the homework, which was 0.125.
+
+```{r}
+# Calculated ATE from Exercise 1.3: 
+mean(dtwo$Y[d$T == 1]) - mean(dtwo$Y[d$T == 0])
+
+# Andres' "real ATE" from the homework: 
+mean(d$Y1 - d$Y0)
+```
+
+## Exercise 1.5: Statistical Power
+
+According to [Stat Methods.net](https://www.statmethods.net/stats/power.html), power analysis "allows us to determine the sample size required to detect an effect of a given size with a given degree of confidence."
+
+There are four quantities within power analysis that are closely related to one another: "sample size," "effect size," "significance level" (i.e. If it's a Type I error, this is the "probability of finding an effect that is not there," and the "power" (i.e. If it's a Type II error, this is the "probability of finding an effect that is there"). If we have three of these quantities, we can use them to find the fourth.
+
+(Side Note: Power = 1 - Probability of TII error (we assume that the probability of a TII error is 0.2)
+
+Having an experiment with 8 people will not give us enough "statistical power." However, assuming that the ATE is 0.125, how many people would we need to enroll in this experiment in order to have enough statistical power?
+
+```{r}
+power.t.test(n = NULL, delta = 0.125, sd = 1, sig.level = 0.05, 
+             power = 0.8, 
+             type = c("two.sample"), 
+             alternative = c("two.sided"))
+```
+
+The output for this fancy-shmancy `power.t.test` is n = 1,006. However, because we want to compare **TWO** groups, we multiply this number by two. In sum: assuming that the ATE is 0.125, we would need at least 2,012 folks enrolled in this experiment to have "enough" statistical power.
