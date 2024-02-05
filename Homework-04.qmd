@@ -1,0 +1,249 @@
+---
+title: "Homework-04"
+format: html
+author: L. Harvey 
+editor: visual
+embed-resources: TRUE 
+---
+
+## Homework #4
+
+Background Code:
+
+```{r}
+library(tidyverse)
+theme_set(theme_light(base_family = "Optima"))
+```
+
+### Exercise 4.1: Colliders
+
+Start by creating this simulated data set from Andres' code:
+
+```{r}
+N <- 10000
+
+d <- tibble(
+  x = rnorm(N, mean = 0, sd = 1),
+  y = rnorm(N, mean = 0, sd = 1)
+)
+```
+
+[Next, create an association between `x` and `y` through some sort of collider bias. Create this association in four different ways, with each of them corresponding to one of the plots in Figure 4.1.]{.underline}
+
+**Code for Figure 4.1, Plot 1:**
+
+![](images/Figure%201.1.png){width="221"}
+
+```{r}
+d_filtered_1 <- d |> 
+  filter(!(x < 0 & y < 0)) 
+
+lm(y ~ x, data = d_filtered_1) 
+```
+
+Code breakdown:
+
+1.  Create a new frame.
+2.  Because the bottom left quadrant is empty, this means that we should exclude any negative values of `x` and `y`.
+3.  Run the regression.
+
+**Code for Figure 4.1, Plot 2:**
+
+![](images/Figure%201.2.png){width="180"}
+
+```{r}
+d_filtered_2 <- d |> 
+  filter(y > 0)
+
+lm(y ~ x, data = d_filtered_2)
+```
+
+**Code for Figure 4.1, Plot 3**
+
+![](images/Figure%201.3.png){width="226"}
+
+```{r}
+d_filtered_3 <- d |> 
+  filter((y > -x - 1.6) & (y < -x + 1.6))
+
+lm(y ~ x, data = d_filtered_3) 
+```
+
+**Code for Figure 4.1, Plot 4**
+
+![](images/Figure%201.4.png){width="212"}
+
+```{r}
+last_plot <- d |> 
+  mutate(z = rbinom(N, size = 1, prob = exp(x + y) / (1 + exp(x + y))))
+  
+lm(y ~ x + z, data = last_plot)
+```
+
+### Exercise 4.2: "The Effect" Vocabulary
+
+The following exercises are from [chapter ten of "The Effect"](https://theeffectbook.net/ch-TreatmentEffects.html).
+
+[Define in your own words each of the following terms:]{.underline}
+
+1.  **Conditional Average Treatment Effect** =When the average treatment effect (ATE) is conditional or dependent on something outside of the treatment.
+    1.  For example: Huntington-Klein's example about men and women being selected for a cervical cancer treatment. There will be a different ATE for the *overall* ATE (i.e., including men and women) versus the *conditional* ATE (i.e., the ATE "conditional on being a man").
+    2.  The CATE "represents only a certain group" and thus cannot be accurately generalized to the entire population.
+2.  **Average Treatment on the Treated** =The average treatment effect (ATE) for subjects who received experimental treatment.
+    1.  We find the ATE when we "set up conditions" to assume that the ATE is identical in both experimental and control groups. In examples like the cervical-cancer-testing one, we will clearly find the ATT (the effect of the treatment on women) and not the ATT of the men (who, lacking cervices, will have no response to this treatment).
+3.  **Average Treatment on the Untreated** =The average treatment effect (ATE) for subjects who did not receive treatment (i.e., subjects who were part of the control group).
+    1.  We find the ATUT by identifying how the treatment varies, predicting the effect size, and then estimating what the impact of the effect *would have* had on the untreated group.
+
+### Exercise 4.3: Heterogeneous Example
+
+[Provide an example of a treatment effect that you would expect to be highly heterogeneous, and explain why you think it is likely to be heterogeneous.]{.underline}
+
+An example of a heterogeneous example would be throwing a group of people onto the field of a D1 soccer game. On the field, you could expect to see some people who grew up playing soccer and are having the time of their lives, some people who have never touched a soccer ball, and any shade of variation in-between. Everyone was thrown onto the soccer field, but the subjects involved would all come from different experiences playing soccer, leading to the treatment having vastly different outcomes on the treated.
+
+### Exercise 4.4: ATE at the Table
+
+The table below shows the hypothetical treatment effect of cognitive behavioral therapy on depression for six participants. (For the sake of this example, the six participants represent the population of interest.)
+
+| Case | Age | Gender     | Effect |
+|------|-----|------------|--------|
+| A    | 15  | Man        | 7      |
+| B    | 40  | Woman      | 3      |
+| C    | 30  | Woman      | 7      |
+| D    | 20  | Non-Binary | 8      |
+| E    | 15  | Man        | 7      |
+| F    | 25  | Woman      | 4      |
+
+[a. What is the overall average treatment effect for the population?]{.underline}
+
+In order to find the ATE, we want to add up all of the observed effects and then take the average. This looks as follows:
+
+```{r}
+total_effect <- c(7, 3, 7, 8, 7, 4)
+sum(total_effect)
+mean(total_effect)
+```
+
+The overall ATE for the population is 6.
+
+[b. What is the average treatment effect for women?]{.underline}
+
+In order to find the average treatment effect for women, we want to add up the treatment effects for women and then find the average. This looks as follows:
+
+```{r}
+ladylike <- c(3, 7, 4)
+sum(ladylike)
+mean(ladylike)
+```
+
+The ATE for women is 4.667.
+
+[c. If nearly all non-binary people get treated, and about half of all women get treated, and we control for the differences between women and non-binary people, what kind of treatment effect average will we get, and what can we say about the numerical estimate we'll get?]{.underline}
+
+Things are getting trickier, here. Some assumptions about variance:
+
+1.  If we want to say that "nearly all non-binary" folks get treated, we can assume that 85% of non-binary people receive treatment.
+2.  If "about half of all women" receive treatment, we can denote this as about 52% of women receive treatment.
+
+Understanding Huntington-Klein's point that "the variance of a binary variable is always `probability it's 1` multiplied by the `probability it's 0`, we can write these assumptions as follows:
+
+```{r}
+non_binary_variance <- (0.85 * 0.15)
+lady_variance <- (0.52 * 0.48)
+```
+
+We know from earlier that our ATE for women is 4.667 and, based on the table, find that the ATE for non-binary folks is 8.
+
+```{r}
+lady_ate <- 4.667 
+non_binary_ate <- 8
+```
+
+We also know that we have to "control for the differences between women and non-binary people," which looks as follows:
+
+```{r}
+ates <- ((non_binary_variance * non_binary_ate) + (lady_variance * lady_ate))
+variance <- (non_binary_variance + lady_variance)
+
+ates / variance
+```
+
+Thus, the average treatment effect we'll get is 5.794.
+
+As there was only one non-binary individual included in our sample, the weight of women in the sample is much heavier than the individual non-binary person. In other words, this means that the average treatment effect shown here (5.794) is largely a reflection of the impact of the treatment on **women**, not women **and** non-binary folks.
+
+[d. If we assume that, in the absence of treatment, everyone would have had the same outcome, and also only teenagers (19 or younger) ever receive treatment, and we compare treated people to control \[group\] people, what kind of treatment effect average will we get, and what can we say about the numerical estimate we'll get?]{.underline}
+
+This question is even trickier, but that's okay. Some more assumptions about variance:
+
+1.  If no one was treated, everyone would have the same outcome.
+2.  Only teenagers (under the age of 19) receive treatment.
+3.  We are only comparing treated people to control group people.
+
+These assumptions look as follows:
+
+```{r}
+teens <- (7 + 7)
+teen_ate <- (teens/2)
+
+everyone_else <- (3 + 7 + 8 + 4)
+everyone_else_ate <- (everyone_else / 4)
+```
+
+Having coded our vectors, we now want to find the treatment effect:
+
+```{r}
+teen_ate - everyone_else_ate
+```
+
+Thus, our ATE is 1.5!
+
+The numerical estimate we get is a *conditional* one, wherein receiving treatment was conditional on being a teenager. Furthermore, the only teenagers included in this sample were men, which is another important characteristic to note.
+
+### Exercise 4.5: ATT versus Overall ATE
+
+[Give an example where the average treatment effect on the treated would be more useful to consider than the overall average treatment effect, and explain why.]{.underline}
+
+One example where the treatment effect on the treated (ATT) would be more useful to consider than the overall ATE would be when targeting a specific population with treatment. For example, if I am evaluating the impact that watching TikTok videos has on how teenage girls view their bodies, I only care about the effect that the treatment has on teenage girls using TikTok.
+
+The ATE is applicable when evaluating the effect that the treatment has on the *entire* population, which is not relevant to the (hypothetical) research topic stated here.
+
+### Exercise 4.6: Treatment Treatment Treatment
+
+Which of the following describes the average treatment effect of assigning treatment, whether or not treatment is actually received?
+
+a\) Local average treatment effect\
+b) Average treatment on the treated\
+c) Intent-to-treat\
+d) Variance-weighted average treatment effect
+
+The answer is c) Intent-to-treat
+
+### Exercise 4.7: Cookies
+
+Suppose you are conducting an experiment to see whether pricing cookies at \$1.99 versus \$2 affects the decision to purchase the cookies. The population of interest is all adults in the United States. You recruit people from your university to participate and randomize them to either see cookies priced as \$1.99 or \$2, then write down whether they purchased the cookies. What kind of average treatment effect can you identify from this experiment?
+
+The average treatment effect we see here is a conditional treatment effect, as receiving the cookie treatment is contingent upon college attendance. (Thus, generalizing these findings out to the general population may not be the best idea, considering only half of America's population has college degrees.)
+
+### Exercise 4.8: Identifying Treatment Effects
+
+For each of the following identification strategies, what kind of treatment effect(s) is most likely to be identified?
+
+[a) A randomized experiment using a representative sample?]{.underline}
+
+We will likely see an average treatment effect.
+
+[b) True randomization within only a certain demographic group?]{.underline}
+
+We will likely see a "conditional average treatment effect."
+
+[c) Closing back-door paths connected to variation in treatment?]{.underline}
+
+We like likely see a "variation-weighted treatment effect."
+
+[d) Isolating the part of the variation in treatment variable that is driven by an exogenous variable?]{.underline}
+
+We will likely see a "local average treatment effect."
+
+[e) The control group is comparable to the treatment group, but treatment effects may be different across these groups?]{.underline}
+
+We will likely see a "heterogeneous treatment effect."
