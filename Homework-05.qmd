@@ -1,0 +1,576 @@
+---
+title: "Homework-05"
+format: html
+author: L. Harvey 
+editor: visual
+embed-resources: TRUE 
+---
+
+## Homework #5 
+
+This week was all about the `marginaleffects` package. As such, homework for this week included redoing some of the things we did in class *without* using this package, then comparing the results.
+
+To start, run the following code chunk:
+
+```{r}
+library(tidyverse)
+library(gssr)
+library(marginaleffects)
+library(broom)
+
+gss2022 <- gss_get_yr(2022)
+```
+
+## Exercise 5.1: Instructions 
+
+This homework is broken into three (3) sections, each of which has two outputs using the `marginaleffects` package. The first output is the ATE estimate and the second output are the ATT/ATU estimates.
+
+Our task with the homework is to reproduce these estimates *without* using the `marginaleffects` package. There are a couple of ways to do this, including using the `predict()` function (from Base R) or the `augment()` function (from the `broom` package).
+
+Both the `predict()` and `augment()` commands contain the argument `newdata`, which can be used in a fashion similar to this homework example:
+
+```{r}
+# Example: 
+ols <- lm(mpg ~ disp + am, data = mtcars)
+
+new_am0 <- mtcars |> 
+  mutate(am = 0)
+
+new_am1 <- mtcars |> 
+  mutate(am = 1)
+
+p0 <- predict(ols, newdata = new_am0) ## predictions for am == 0
+p1 <- predict(ols, newdata = new_am1) ## predictions for am == 1
+```
+
+## Exercise 5.2: Linear Regression 
+
+Let's start by loading in Steve's code involving the `tvhours`, `college`, and `parcol` variables:
+
+```{r}
+gss2022 <- gss_get_yr(2022)
+d <- gss2022 |> 
+  select(tvhours, degree, madeg, padeg) |> 
+  mutate(pardeg = pmax(madeg, padeg, na.rm = TRUE),
+         college = if_else(degree >= 3, 1L, 0L),
+         parcol = if_else(pardeg >= 3, 1L, 0L)) |>
+  select(tvhours, college, parcol) |> 
+  drop_na()
+```
+
+### Exercise 5.2.1: Additive Link Functions (No Interactions)
+
+Here's the Andrés homework code:
+
+```{r}
+mod1 <- lm(tvhours ~ college + parcol, data = d)
+
+# ATE estimate
+avg_slopes(mod1, variables = "college") |> 
+  tidy()
+```
+
+1.  This output gives us an estimated value of `-0.7957` and a standard error of `0.1509`.
+
+Now that we have that code, we want to calculate the ATE manually (i.e. without the `marginaleffects` package). Remember that the ATE is the total of all of the observed effects divided by the number of observations (which, in this example, reads as: ATE = Mean of p1 - p0).
+
+1.  We are asked to manually predict our estimate of `-0.7957` using only the `predict()` functions, wherein we run the model on the data and then predict the value from there.
+2.  Again: p1 and p0 are the predicted values of y (because they represent the value of having versus not having a college degree, respectively).
+
+```{r}
+ols <- lm(tvhours ~ college + parcol, data = d)
+summary(ols)
+
+new_0 <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+new_1 <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(ols, newdata = new_0) ## Predictions for college == 0
+p1 <- predict(ols, newdata = new_1) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+Note that our estimated value of `-0.7957` matches in both the Andrés code and our code with the `predict()` command.
+
+Onward!
+
+### Exercise 5.2.2: Additive Link Function (With Interactions) 
+
+Yet again, we're going to start with Andrés' homework code:
+
+```{r}
+mod2 <- lm(tvhours ~ college * parcol, data = d)
+
+# ATE estimate
+avg_slopes(mod2, variables = "college") |> 
+  tidy()
+```
+
+which gives us an estimate of `-0.8033` for our ATE.
+
+Here is the example code that Andrés gave us for the additive link function (ft. interactions):
+
+```{r}
+# ATT/ATU estimate
+avg_slopes(
+  model = mod2, 
+  variables = "college",
+  by = "college" # separately by treatment group
+) |> 
+  tidy()
+```
+
+This tells us that using the `slopes()` function gives us an estimated value of `-0.8212` for the ATU (when `college == 0`) and an estimated value of `-0.7718` for the ATT (when `college == 1`).
+
+We can then find the ATT and ATU estimate by modifying the code we used in exercise 5.2.1 as follows:
+
+```{r}
+ols_2 <- lm(tvhours ~ college * parcol, data = d)
+# summary(ols_2)
+
+new_no_college <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+new_yes_college <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(ols_2, newdata = new_no_college) ## Predictions for college == 0
+p1 <- predict(ols_2, newdata = new_yes_college) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+Our estimated value here is thus `-0.8033`—a perfect match for our earlier estimate of `-0.8033`!
+
+Onto the next.
+
+## Exercise 5.3: Poisson Regression 
+
+Let's start by inputting the code we're going to be using:
+
+```{r}
+d <- gss2022 |>
+  filter(wrkstat == 1) |> # full time workers
+  select(realrinc, degree, madeg, padeg, sex, age) |> 
+  mutate(pardeg = pmax(madeg, padeg, na.rm = TRUE),
+         college = if_else(degree >= 3, 1L, 0L),
+         parcol = if_else(pardeg >= 3, 1L, 0L),
+         female = if_else(sex == 2, 1L, 0L),
+         realrinc = floor(realrinc)) |>             # integer
+  select(realrinc, college, parcol, female, age) |> 
+  drop_na()
+```
+
+### Exercise 5.3.1: Using Log-Counts (No Interactions)
+
+Here's the example code that included if we were able to use the `slopes()` function:
+
+```{r}
+qp1 <- glm(realrinc ~ college + (parcol + female + age + I(age^2)), 
+           data = d,
+           family = "quasipoisson")
+
+avg_slopes(qp1,
+           variables = "college",
+           type = "link") |> 
+  tidy()
+```
+
+This code gives us an output of `0.5994` for our estimated ATE.
+
+Next, we're given code to find the estimated output using the `slopes()` command, which is as follows:
+
+```{r}
+avg_slopes(qp1,
+           variables = "college",
+           type = "link",
+           by = "college") |> # separately by treatment group
+  tidy()
+```
+
+This tells us that using the `slopes()` function gives us an estimated value of `0.5995` when `college == 0` and an estimated value of `0.5995` when `college == 1`.
+
+Now, let's try rewriting the code in order to find the same estimated output **without** using the `slopes()` command:
+
+```{r}
+third_ols <- glm(realrinc ~ college + (parcol + female + age + I(age^2)), 
+                 data = d, 
+                 family = "quasipoisson")
+
+summary(third_ols)
+
+still_no_college <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+still_yes_college <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(third_ols, newdata = still_no_college) ## Predictions for college == 0
+p1 <- predict(third_ols, newdata = still_yes_college) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+This gives us an output of `0.59945`, which matches our above estimate of `0.599`.
+
+### Exercise 5.3.2: Non-Linear Response (No Interactions) 
+
+Starting with the Andrés code, which gives us the following output:
+
+```{r}
+avg_slopes(qp1,
+           variables = "college",
+           type = "response") |> 
+  tidy()
+```
+
+wherein the value of our estimate is `21237.3`.
+
+Now let's take his code to find the estimated values for `college == 0` and `college == 1`:
+
+```{r}
+avg_slopes(qp1,
+           variables = "college",
+           type = "response",
+           by = "college") |> # separately by treatment group
+  tidy()
+```
+
+Which gives us an output that there is an estimated ATU value of `20635.71` (when `college == 0`) and an estimated ATT value of `21976.81` (when `college == 1`).
+
+Now, let's find the estimate by using the `predict()` function:
+
+```{r}
+fourth_ols <- glm(realrinc ~ college + (parcol + female + age + I(age^2)), data = d)
+#summary(fourth_ols)
+
+none_college <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+yeah_college <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(fourth_ols, newdata = none_college) ## Predictions for college == 0
+p1 <- predict(fourth_ols, newdata = yeah_college) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+Our estimated ATE output is thus `21222.08`, as compared to our original output of `21237.3`.
+
+### Exercise 5.3.3: Using Log-Counts (With Interactions) 
+
+Starting with Andrés code,
+
+```{r}
+qp2 <- glm(realrinc ~ college * (parcol + female + age + I(age^2)), 
+           data = d,
+           family = "quasipoisson")
+
+avg_slopes(qp2,
+           variables = "college",
+           type = "link") |> 
+  tidy()
+```
+
+which tells us that our estimated ATE value is `0.5802`.
+
+Comparing this with the model estimated `slopes()` code:
+
+```{r}
+avg_slopes(qp2,
+           variables = "college",
+           type = "link",
+           by = "college") |> # separately by treatment group
+  tidy()
+```
+
+Which tells us that the estimated value for our ATU (when `college == 0`) is `0.567` and that the estimated value for our ATT (when `college == 1`) is `0.596`.
+
+If we try to find these values without using `predict()`, it looks as follows:
+
+```{r}
+new_qp2 <- glm(realrinc ~ college * (parcol + female + age + I(age^2)), 
+           data = d,
+           family = "quasipoisson")
+
+qp2_no_college <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+qp2_yes_college <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(new_qp2, newdata = qp2_no_college) ## Predictions for college == 0
+p1 <- predict(new_qp2, newdata = qp2_yes_college) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+Our ATE output is `0.5802` (as compared to our original output of `0.5802`). Boo-yah.
+
+![](images/booyah.png)
+
+### Exercise 5.3.4: Non-Linear Response (With Interactions) 
+
+Starting with the given code for the estimate, giving us an estimated ATE of `21189.9`.
+
+```{r}
+avg_slopes(qp2,
+           variables = "college",
+           type = "response") |> 
+  tidy()
+```
+
+Here are the estimates for when `college == 0` and `college == 1` using `slope()`:
+
+```{r}
+avg_slopes(qp2,
+           variables = "college",
+           type = "response",
+           by = "college") |> # separately by treatment group
+  tidy()
+```
+
+Thus, when `college == 0` the value of the ATU is `20196.39` and when `college == 1` the value of the ATT is `22411.16`.
+
+Now, to do this without using the `slope()` command:
+
+```{r}
+qp3 <- glm(realrinc ~ college * (parcol + female + age + I(age^2)), 
+           data = d,
+           family = "quasipoisson")
+
+qp3_no_college <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+qp3_yes_college <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(qp3, newdata = qp3_no_college) ## Predictions for college == 0
+p1 <- predict(qp3, newdata = qp3_yes_college) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+We get an output estimate of the ATE that is `0.5802`.
+
+1.  This is not accurate—WTF happened here?
+
+## Logistic Regression 
+
+Starting by inputting the given homework code:
+
+```{r}
+d <- gss2022 |>
+  select(abany, degree, madeg, padeg, sex, age) |> 
+  mutate(pardeg = pmax(madeg, padeg, na.rm = TRUE),
+         college = if_else(degree >= 3, 1L, 0L),
+         parcol = if_else(pardeg >= 3, 1L, 0L),
+         female = if_else(sex == 2, 1L, 0L),
+         abany = if_else(abany == 1, 1L, 0L)) |>
+  select(abany, college, parcol, female, age) |> 
+  drop_na()
+```
+
+### Exercise 5.4.1: Using Log-Odds (No Interactions)
+
+Using the code that Andrés provided:
+
+```{r}
+lr1 <- glm(abany ~ college + (parcol + female + age + I(age^2)),
+          data = d,
+          family = binomial)
+
+# ATE estimate
+avg_slopes(lr1,
+           variables = "college",
+           type = "link") |> 
+  tidy()
+```
+
+This tells us that our estimated ATE output (from using `slopes()`) is `0.4379`.
+
+Finding the different values for `college` when it equals 0 and 1, respectively:
+
+```{r}
+avg_slopes(lr1,
+           variables = "college",
+           by = "college",
+           type = "link") |>
+  tidy()
+```
+
+This gives us an output where the estimate for both our ATU (`college == 0`) and ATT (`college == 1`) are 0.4379.
+
+Now, replicating this output without using `slopes()`:
+
+```{r}
+no_slopey <- glm(abany ~ college + (parcol + female + age + I(age^2)),
+          data = d,
+          family = binomial)
+
+no_slope_no_college <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+no_slope_yes_college <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(no_slopey, newdata = no_slope_no_college) ## Predictions for college == 0
+p1 <- predict(no_slopey, newdata = no_slope_yes_college) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+This gives us an output of `0.4379`, which matches our original ATE estimate of `0.4379`.
+
+Forward!
+
+### Exercise 5.4.2: Using Non-Linear Response (No Interactions)
+
+(Note: "Non-Linear Response" is the same thing as probability.)
+
+Starting once again with our given ATE estimate:
+
+```{r}
+avg_slopes(lr1,
+           variables = "college",
+           type = "response") |> 
+  tidy()
+```
+
+Which provides us an ATE output of `0.1018`.
+
+Next, finding our estimated values where `college == 0` and `college == 1`:
+
+```{r}
+avg_slopes(lr1,
+           variables = "college",
+           by = "college",
+           type = "response") |> 
+  tidy()
+```
+
+Our estimated values for our ATU (when `college == 0`) is `0.1036` and our ATT (when `college == 1`) is `0.0988`.
+
+Now, let's find the ATE without using `slopes()`:
+
+```{r}
+hit_the_slope_jack <- glm(abany ~ college + (parcol + female + age + I(age^2)),
+          data = d,
+          family = binomial)
+
+no_slope_no_colleg <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+no_slope_yes_colleg <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(hit_the_slope_jack, newdata = no_slope_no_colleg) ## Predictions for college == 0
+p1 <- predict(hit_the_slope_jack, newdata = no_slope_yes_colleg) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+Our ATE is thus `0.4379`.
+
+### Exercise 5.4.3: Using Log-Odds (With Interactions) 
+
+Starting with da estimated ATE:
+
+```{r}
+lr2 <- glm(abany ~ college * (parcol + female + age + I(age^2)),
+          data = d,
+          family = binomial)
+
+# ATE estimate
+avg_slopes(lr2,
+           variables = "college",
+           type = "link") |> 
+  tidy()
+```
+
+Our estimated ATE has a value of `0.4529`.
+
+Now finding our values for when `college == 0` and `college == 1`, respectively:
+
+```{r}
+avg_slopes(lr2,
+           variables = "college",
+           by = "college",
+           type = "link") |> 
+  tidy()
+```
+
+This gives us an output where the estimated values for our ATU (`college == 0`) is `0.449` and the estimated value for our ATT (`college == 1)` is `0.457`.
+
+To find this without using our beloved `slopes()`:
+
+```{r}
+slope_on_a_rope <- glm(abany ~ college + (parcol + female + age + I(age^2)),
+          data = d,
+          family = binomial)
+
+no_college_nor_slope <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+yes_college_no_slope <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(slope_on_a_rope, newdata = no_college_nor_slope) ## Predictions for college == 0
+p1 <- predict(slope_on_a_rope, newdata = yes_college_no_slope) ## Predictions for college == 1
+
+mean(p1 - p0)
+```
+
+This gives us an output of `0.4379` for our ATE.
+
+Last, but certainly not least...
+
+### Exercise 5.4.4: Using Non-Linear Response (With Interactions)
+
+(Again: Note that "non-linear response" refers to probabilities.)
+
+Starting off with our ATE estimate:
+
+```{r}
+avg_slopes(lr2, 
+          variables = "college", 
+          type = "response") |> 
+  tidy()
+```
+
+Our ATE estimate is `0.103`.
+
+Next, our ATU and ATT estimates:
+
+```{r}
+avg_slopes(lr2,
+           variables = "college",
+           by = "college",
+           type = "response") |> 
+  tidy()
+```
+
+Our estimates ATU is `0.1043`, while the estimated ATT is `0.1012`.
+
+One last time, let's find the ATE without using the `slope()` function:
+
+```{r}
+final_no_slope <- glm(abany ~ college * (parcol + female + age + I(age^2)),
+          data = d,
+          family = binomial)
+
+still_no_edu <- d |> 
+  mutate(college = 0) # Used to estimate ATU 
+
+still_edu <- d |> 
+  mutate(college = 1) # Used to estimate the ATT 
+
+p0 <- predict(final_no_slope, newdata = still_no_edu, type = "response") ## Predictions for college == 0
+p1 <- predict(final_no_slope, newdata = still_edu, type = "response") ## Predictions for college == 1
+
+mean(p1 - p0)
+```
