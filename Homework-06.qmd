@@ -1,0 +1,341 @@
+---
+title: "Homework-06"
+format: html
+author: L. Harvey 
+editor: visual
+embed-resources: TRUE
+---
+
+## Homework #6
+
+Background code:
+
+```{r}
+library(tidyverse)
+library(broom)
+library(ggplot2)
+
+theme_set(theme_linedraw(base_family = "Avenir Next Condensed"))
+```
+
+## Exercise 6.2: Balance and Overlap
+
+**Balance**
+
+The kind of bias we get from confounding can be interpreted as "imbalance" in the potential outcomes across treatment groups. Randomization makes this kind of imbalance unlikely; however, imbalance is almost guaranteed in observational studies.
+
+Simply stated, this means that imbalance occurs if the distribution of confounders differ for the treatment and control groups.
+
+**Overlap**
+
+![](Figure 6.1.png)
+
+As demonstrated in the pictures above, lack of complete overlap (or "common support") creates problems in our data. This is because in the figures above, we have treatment or control observations for which there are no empirical counterfactuals.
+
+1.  Remember: In class, we discussed **common support**! Common support refers to strata that "only have treatment or control cases," but **NOT BOTH**.
+2.  Thus, strata **WITH** both treatment and control cases are in the **region of common support**.
+
+For the example above, this means that our knowledge about treatment effects is inherently limited in regions of non-overlap. Furthermore, any causal inference in `Figure 6.1 (a)` would have to rely on modeling assumptions instead of having direct support from the data. In `Figure 6.1 (c)`, causal inference is possible for the full treatment group, but only possible for a subset of the control group.
+
+*Note: This is the exact same thing we talked about when thinking about the potential outcomes for a cervical cancer vaccine in a population for men and women.*
+
+### Exercise 6.2.1: Looking for Imbalance
+
+To start, let's load the `cattaneo2.dta` data that Steve showed us in class.
+
+```{r}
+d <- haven::read_dta("/Users/laurenharvey/Desktop/SOC-Stats-2/Data/cattaneo2.dta")
+
+d <- d |> 
+  haven::zap_labels() |> 
+  select(bweight, lbweight, mbsmoke, mmarried, mage, medu, fbaby, alcohol, mrace, nprenatal)
+
+glimpse(d)
+```
+
+After loading in this data, we can check for imbalance for several covariates. The way that we do this is by examining their "absolute standardized difference" in means (by using something called a "balance plot").
+
+Below, find a graph that Andrés made to show the *absolute standardized difference in means values* for a set of confounding covariates that might predict both `mbsmoke` and birth weight.
+
+![](Andres Plot.png)
+
+The exercise for this portion of the homework is as follows:
+
+[Reproduce something close to this figure.]{.underline}
+
+In order to compare the standardized differences in means for these covariates, we first need to figure out the absolute standard differences in means of each of these variables.
+
+1.  The way that we do this is by using the most common metric to calculate this: "Absolute Standardized Mean Difference" (or "ASMD," for the folks at home). The ASMD is a kind of summary statistic used in studies that measure the same outcome in different ways (in this case, measuring these poor babies by the variables listed above).
+2.  The statistical magic behind the ASMD is calculated as follows:
+    1.  `ASMD` = The difference in means of a covariate **across the treatment groups**, divided by the standard deviation in the treated group.
+    2.  Remember that our research question for this data is as follows: "What is the effect of maternal smoking on infant health?"
+3.  Lastly, keep in mind that we are standardizing all of these variables against the standard deviations present in our treatment group: `mbsmoke` (this refers to mothers that *did* smoke during their pregnancies!).
+
+#### Making Sense of ASMD 
+
+Having established this background, let's go through each of the variables in order to find their ASMD.
+
+The selected variables from this dataset were: `bweight`, `lbweight`, `mbsmoke`, `mmarried`, `mage`, `medu`, `fbaby`, `alcohol`, `mrace`, and `nprenatal`. However, the variables included on the table that we're supposed to reproduce are as follows: `mmarried`, `mage`, `medu`, `fbaby`, `alcohol`, `mrace`, and `nprenatal`.
+
+Again, this process operates in two steps: Find the mean difference between the treated groups in that variable, then divide that difference by the standard deviation of `mbsmoke`.
+
+**Practice Variable 1:** `bweight`
+
+```{r}
+# First, we want to find the difference between the treated groups: 
+bweight_mean_difference <- (mean(d$bweight[d$mbsmoke == 1]) - mean(d$bweight[d$mbsmoke == 0]))
+bweight_mean_difference
+
+# Next, we want to divide this by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- mean(d$mbsmoke[d$mbsmoke == 1])
+
+bweight_mean_difference / yes_mbsmoke
+```
+
+Okay, so something wasn't working out here. Let's try running the code again so that we don't get matching outputs for both values. (Turns out the problem was that I was pulling the `mean` from `mbsmoke`, rather than the `standard deviation`. Now that the deviation is fixed, the code should run, right?)
+
+```{r}
+# Find the difference between the treated groups: 
+bweight_mean_difference <- (mean(d$bweight[d$mbsmoke == 1]) - mean(d$bweight[d$mbsmoke == 0]))
+bweight_mean_difference
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$mbsmoke[d$mbsmoke == 1])
+
+bweight_mean_difference / yes_mbsmoke
+```
+
+Wrong. We are now getting an output of `-Inf`, which means that we are not only wrong, but we are infinitely negatively wrong.
+
+Third time's the charm? Let's futz around with the `yes_mbsmoke` variable to figure out the issue.
+
+```{r}
+# Find the difference between the treated groups: 
+bweight_mean_difference <- (mean(d$bweight[d$mbsmoke == 1]) - mean(d$bweight[d$mbsmoke == 0]))
+bweight_mean_difference
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$bweight[d$mbsmoke == 1])
+
+bweight_mean_difference / yes_mbsmoke
+```
+
+Oh, thank god. We now get an output for `bweight_mean_difference / yes_mbsmoke` that is -0.490.
+
+1.  Important note: We actually weren't asked to find the output for `bweight`! Thus, this serves as practice. Oh well.
+
+**ACTUAL Variable 1: `mmarried`**
+
+Let's try this procedure again, but using the right variable, this time.
+
+```{r}
+# Find the difference between the treated groups: 
+mmarried_mean_difference <- (mean(d$mmarried[d$mbsmoke == 1]) - mean(d$mmarried[d$mbsmoke == 0]))
+mmarried_mean_difference
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$mmarried[d$mbsmoke == 1])
+
+mmarried_mean_difference / yes_mbsmoke
+```
+
+Our first output is `-0.27`, which is our **unstandardized** difference between treatment groups within the `mmarried` variable. Our second output is `-0.55`, which is the actual standardized difference we were looking for. Let's see how our output compares to Andrés's graph:
+
+![](kludgy.png)
+
+Hell yeah.
+
+Now, let's do this six more times.
+
+**Variable 2:** `mage`
+
+```{r}
+# Find the difference between the treated groups: 
+mage_mean_difference <- (mean(d$mage[d$mbsmoke == 1]) - mean(d$mage[d$mbsmoke == 0]))
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$mage[d$mbsmoke == 1])
+
+mage_mean_difference / yes_mbsmoke
+```
+
+**Variable 3: `medu`**
+
+```{r}
+# Find the difference between the treated groups: 
+medu_mean_difference <- (mean(d$medu[d$mbsmoke == 1]) - mean(d$medu[d$mbsmoke == 0]))
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$medu[d$mbsmoke == 1])
+
+medu_mean_difference / yes_mbsmoke
+```
+
+**Variable 4: `fbaby`**
+
+```{r}
+# Find the difference between the treated groups: 
+fbaby_mean_difference <- (mean(d$fbaby[d$mbsmoke == 1]) - mean(d$fbaby[d$mbsmoke == 0]))
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$fbaby[d$mbsmoke == 1])
+
+fbaby_mean_difference / yes_mbsmoke
+```
+
+**Variable 5:** `alcohol`
+
+```{r}
+# Find the difference between the treated groups: 
+alcohol_mean_difference <- (mean(d$alcohol[d$mbsmoke == 1]) - mean(d$alcohol[d$mbsmoke == 0]))
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$alcohol[d$mbsmoke == 1])
+
+alcohol_mean_difference / yes_mbsmoke
+```
+
+**Variable 6:** `mrace`
+
+```{r}
+# Find the difference between the treated groups: 
+mrace_mean_difference <- (mean(d$mrace[d$mbsmoke == 1]) - mean(d$mrace[d$mbsmoke == 0]))
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$mrace[d$mbsmoke == 1])
+
+mrace_mean_difference / yes_mbsmoke
+```
+
+**Variable 7:** `nprenatal`
+
+```{r}
+# Find the difference between the treated groups: 
+nprenatal_mean_difference <- (mean(d$nprenatal[d$mbsmoke == 1]) - mean(d$nprenatal[d$mbsmoke == 0]))
+
+# Divide by the standard deviation for `mbsmoke` when `mbsmoke` == 1. 
+yes_mbsmoke <- sd(d$nprenatal[d$mbsmoke == 1])
+
+nprenatal_mean_difference / yes_mbsmoke
+```
+
+#### Making a Graph 
+
+Having figured out the statistical magic behind these numbers, now let's reproduce them in a graph.
+
+First, we'll make a tibble to house these values:
+
+```{r}
+# Creating the vector for the variables 
+variables <- c("medu", "mmarried", "mage", "nprenatal", "alcohol", "fbaby", "mrace")
+asmd_values <- c(-0.5955355, -0.5566198, -0.3100749, -0.2615908, 0.2518852, -0.1688174, -0.09859089)
+
+tibblage <- tibble(variables, asmd_values)
+
+tibblage
+```
+
+(Hey, she's kludgy, but she works!)
+
+```{r}
+ggplot(data = tibblage,
+       mapping = aes(x = asmd_values, 
+                     y = variables)) +
+                 xlab("Variables") + 
+                 ylab("ASMD Variables") + geom_point()
+```
+
+[What do you think are the most important covariates you need to adjust for in terms of the potential biases in the treatment effect?]{.underline}
+
+The most important covariates to adjust for in terms of potential biases are `mmarried` and `medu`. This is because these are the covariates that have the greatest deviation from our mean. Specifically, both of these variables are close to being two standard deviations away from our mean of `0` (with `mmarried` having a value of `-0.55` and `medu` having a value of `-0.595`).
+
+## Exercise 6.3.1: Weighting 
+
+You want to know whether practicing cursive improves your penmanship (on a scale of 1-10).
+
+You find that, among people who don't practice cursive, average penmanship is 5. 10 people are left-handed, 2 people are ambidextrous, and 88 people are right-handed.
+
+Among people who *do* practice cursive, average penmanship varies. The 6 left-handed people have an average penmanship score of 7, 4 ambidextrous people have an average penmanship score of 4, and 90 right-handed people have an average penmanship score of 6.
+
+| Treatment | **n**  | Righty | Lefty | Ambidextrous | Score |
+|-----------|--------|--------|-------|--------------|-------|
+| **0**     | 10/100 | 0      | 1     | 0            | 5     |
+| **0**     | 02/100 | 0      | 0     | 1            | 5     |
+| **0**     | 88/100 | 1      | 0     | 0            | 5     |
+| **1**     | 06/100 | 0      | 1     | 0            | 7     |
+| **1**     | 04/100 | 0      | 0     | 1            | 4     |
+| **1**     | 90/100 | 1      | 0     | 0            | 6     |
+
+#### Exercise A: Weights for the Control Group 
+
+[Create a set of weights that will *make the treated group match the control group on handedness*. What weights will be given to the left, ambidextrous, and right-handed people *in the control group*?]{.underline}
+
+In order to make the treated group match the control group on handedness, we will give the control group a weight of 1 (because we do not want the weight of the **control** group to change; instead, we want to match the weights of the **treatment** group to the control group).
+
+#### Exercise B: Weights for the Treated Group 
+
+[What weights will be given to the lefties, righties, and ambidextrous folks in the **treated** group?]{.underline}
+
+The weighing system works as follows: Untreated/Treated.
+
+Thus, our breakdown for weights for each of the groups is as follows:
+
+1.  Unreated/Treated Lefties = 10/06
+    1.  The weight for lefties is: `1.667`
+2.  Untreated/Treated Righties = 88/90
+    1.  The weight for righties is: `0.977`
+3.  Untreated/Treated Ambidextrous = 02/04
+    1.  The weight for ambidextrous folks is: `0.5`
+
+#### Exercise C: Proportions
+
+[Use the weights from part b to calculate the *proportion of left-handed people in the treated group*, as well as the proportion of ambidextrous and right-handed people. (Hint: We should get 10%, 2%, and 88%, or pretty close to it.)]{.underline}
+
+1.  The proportion of left-handed people in the treatment group: (06/100)
+    1.  The proportion is: 6/100 \* 1.667 = `0.10002`
+2.  The proportion of right-handed people in the treatment group: (90/100)
+    1.  The proportion is: 90/100 \* 0.977 = `0.8793`
+3.  The proportion of ambidextrous people in the treatment group: (04/100)
+    1.  The proportion is: 04/100 \* 0.5 = `0.02`
+
+#### Exercise D: Weighted Average (for Treated)
+
+[What is the weighted average penmanship score in the treated group?]{.underline}
+
+To find the weighted average penmanship score in the treated group, we have to multiply each score by its weight, sum the results, and then divide by the sum of the weights.
+
+Thus:
+
+```{r}
+lefties <- (1.667 * 6 * 7)
+
+righties <- (0.977 * 90 * 6) 
+
+ambidextrous <- (0.5 * 4 * 4)
+
+total <- lefties + righties + ambidextrous / 100
+
+total
+```
+
+Wait, that's not right. Let's try again:
+
+```{r}
+righties + lefties + ambidextrous / 100
+```
+
+For whatever reason, R just does not want to run that code properly (Andres, do you know why the output is being so weird?).
+
+Let's just do it with numbers, then:
+
+```{r}
+( (1.667 * 6 * 7) + (0.5 * 4 * 4) + (0.978 * 90 * 6) ) / 100
+```
+
+Thus, the weighted average for folks in the treated group is `6.06`.
+
+#### Exercise E: Estimating the Treatment Effect  
+
+[What is the effect of practicing cursive that we would estimate using this data?]{.underline}
+
+Given that the weighted average for treated folks is `6.06` and the effect for our control group is `5`, the estimated effect of practicing cursive on penmanship is 6.06 - 5 = `1.06`.
