@@ -1,0 +1,284 @@
+---
+title: "Homework-07"
+format: html
+author: L. Harvey 
+editor: visual
+date: 26 February 2024 
+---
+
+## Homework #7
+
+Let's start by loading in our background homework code.
+
+```{r}
+# Packages ---
+library(tidyverse)
+library(broom)
+library(cobalt)
+library(MatchIt)
+library(WeightIt)
+
+# Helper Functions ---
+love_plot <- function(x) {
+  cobalt::love.plot(x, 
+    binary = "std" ,
+    stats = c("m", "ks") ,
+    thresholds = c(.1, .05),
+    var.order = "adjusted",
+    abs = TRUE
+  )
+}
+```
+
+## Exercise 7.1: Matching and Weighting 
+
+For these exercises, we'll be using one of the versions of the "Lalonde data," which is used in almost every paper on matching. This is data on a job training program (the treatment) that was intended to raise future earnings (the outcome). We load in the data as follows:
+
+```{r}
+load("/Users/laurenharvey/Downloads/exercise_data.RData")
+```
+
+Loading this brings in two objects into our global environment: `d_exper` (the experimental subset of the data) and `d` (the treated cases and a sample of observational controls from the PSID. The treatment is `treat` and the outcome is `re78` (income in \$1000s).
+
+Our mission today is to use the experimental subset to set an experimental benchmark, then see how close we can get to this benchmark using various matching and weighting methods.
+
+A breakdown of the variables is as follows:
+
+| Variable  | Description                     |
+|-----------|---------------------------------|
+| `age`     | Age in years                    |
+| `educ`    | Years of education              |
+| `black`   | 1 = Black; 0 otherwise          |
+| `hisp`    | 1 = Hispanic; 0 otherwise       |
+| `married` | 1 = Married; 0 otherwise        |
+| `nodegr`  | 1 = Married; 0 otherwise        |
+| `re74`    | 1974 income in \$1000s          |
+| `re75`    | 1975 income in \$1000s          |
+| `u74`     | 1 = No '74 income; 0 otherwise  |
+| `u75`     | 1 = No '75 income; 0 otherwise  |
+
+Before getting into these exercises, there are a few things that may make life easier:
+
+1\. Adding a factor version of the treatment to the data frame for easy plotting
+
+```{r}
+d_observed <- d |> 
+  mutate(treatment_received = if_else(treat == 1, "Treatment", "Control"))
+
+d_exper <- d_exper |> 
+  mutate(treatment_received = if_else(treat == 1, "Treatment", "Control"))
+```
+
+2\. Creating formula objects that contain the propensity score (or matching) models with and without quadratic terms
+
+```{r}
+formula_no_quad <- "re78 ~ treat + age + educ + black + hisp + married + nodegr + re74 + re75 + u74 + u75" 
+
+formula_quad <- "re78 ~ treat + age + I(age^2) + educ + I(educ^2) + black + hisp + married + nodegr + re74 + I(re74^2) + re75 + I(re75^2) + u74 + u75" 
+```
+
+We'll begin by looking at the experimental data (`d_exper`). After that, we'll conduct various forms of matching and weighting on the observational data (`d`). For each exercise after the first four, the basic workflow will be:
+
+1.  Match or weight, as directed
+2.  Check balance (overall, if applicable, and by covariate) using graphical and numeric means
+3.  Estimate the ATT
+
+Let's get into it.
+
+## Exercise 7.1.1: Estimating the ATT 
+
+[Use the experimental data to estimate the effect of the job training treatment. How much does it appear to affect 1978 income?]{.underline}
+
+In order to estimate the effect of the job training treatment in 1978, we compare the **experimental** effects of the treatment versus the effects of the control. This is our naive estimate, which reads as follows:
+
+```{r}
+mean(d_exper$re78[d_exper$treat == 1]) - mean(d_exper$re78[d_exper$treat == 0])
+```
+
+The naive estimate for the experimental data is \$886.30.
+
+[Now look at the observational data (for all exercises from now on). How large is the raw difference in 1978 income between the treatment group and the PSID comparison group?]{.underline}
+
+We again find the naive estimate by subtracting the effects of the treatment (but this time, from the **observed** data set):
+
+```{r}
+mean(d_observed$re78[d_observed$treat == 1]) - mean(d_observed$re78[d_observed$treat == 0])
+```
+
+The naive estimate for the observational data is -\$16,541.34. Clearly, there are some shenanigans ensuing and likely some variables that we are not properly addressing.
+
+## Exercise 7.1.2: Estimating with Regression
+
+[Try to estimate the effect of the treatment using regression. What does regression say the effect of the program is?]{.underline}
+
+```{r}
+mod_no_adjustments <- lm(re78 ~ treat, data = d_exper)
+coefficients(mod_no_adjustments)
+tidy(mod_no_adjustments)
+```
+
+Without making any adjustments, there is an estimated effect of treatment as increasing income by \$886.30.
+
+What happens to our model when we *do* include adjustments? (Note: This is using the model with quadratic variables)
+
+```{r}
+mod_with_adjustments <- lm(formula_quad, data = d_exper)
+summary(mod_with_adjustments)
+tidy(mod_with_adjustments)
+```
+
+When we run a model that *does* include adjustments and quadratic terms, the estimated effect of treatment is still negative.
+
+## Exercise 7.1.3: Exact Matching 
+
+[Begin by exact matching on all the dummy variables.]{.underline}
+
+The code to create matchy-matchiness on dummy variables is as follows:
+
+```{r}
+exact_matchy_out <- matchit(treat ~ black + hisp + married + nodegr + u74 + u75, 
+                        data = d_observed, 
+                        method = "exact", 
+                        estimand = "ATT")
+```
+
+[How many treated cases cannot be matched?]{.underline}
+
+```{r}
+summary(exact_matchy_out)
+```
+
+Our output tells us that 121 cases from the "control" group in data set `d_observed` that could not be matched. Furthermore, there were 10 cases from the "treated" group in data set `d_observed` that could not be matched.
+
+[What is the (FS)ATT estimate?]{.underline}
+
+Remember that dropped cases have a weight of 0 (because we aren't using them!).
+
+1.  In order to find the FSATT, we have to account for these dropped cases.
+2.  We want to estimate the FSATT by using a regression model.
+
+```{r}
+exact_match_data <- match.data(exact_matchy_out)
+
+finding_fsatt_mod <- lm(formula = re78 ~ treat, 
+                        data = exact_match_data, 
+                        weights = weights)
+
+summary(finding_fsatt_mod)
+```
+
+The FSATT is -2.3863, meaning that the estimated ATT is a decrease in income of \$2,386.30 (as compared to those who did *not* receive the treatment).
+
+## Exercise 7.1.4: Estimating Propensity
+
+[Use the observational data to estimate each case's propensity to receive treatment using `glm()`. Use a logistic regression with quadratic terms for age, education, 1974 income, and 1975 income. Spend a few moments thinking about what this model says.]{.underline}
+
+```{r}
+propensity_mod <- glm(formula = treat ~ age + I(age^2) + educ + I(educ^2) + black + hisp + married + nodegr + re74 + I(re74^2) + re75 + I(re75^2) + u74 + u75, 
+                      data = d_observed, 
+                      family = "binomial")
+
+summary(propensity_mod)
+```
+
+The `propensity_mod` model produces estimates of receiving treatment on the basis of the variables included in the model (i.e., `age`, `educ`, `black`, `hisp`, `married`, `nodegr`, `re74`, `re75`, `u74`, and `u75`). Our intercept is still negative, as are two of the four continuous variables included in this formula (i.e., `I(age^2)` and `I(educ^2)`).
+
+[Look at the density plots of the p-score for treated and untreated groups.]{.underline}
+
+```{r}
+# Mutate the data frame
+for_the_plot <- d_observed |> 
+  mutate(p_score = predict(propensity_mod, 
+                           data = d_observed, 
+                           type = "response"))
+
+# Then create the plot
+for_the_plot |> ggplot(aes(x = p_score)) +
+  geom_density() + 
+  facet_wrap(~ treat) +
+  theme_minimal()
+```
+
+The above code produces two density plots, sorted into either 0 (did not receive the treatment) or 1 (received the treatment). Both plots show non-linear functions (which is a consequence of the quadratic variables included in the formula, like `I(age^2)` and `I(re74^2)`). Lastly, the treated group had a peak propensity score of about 0.80, while the control group had a plateaued propensity score throughout the density plot.
+
+## Exercise 7.1.5: Using `WeightIt`
+
+[Estimate propensity scores and ATT weights using `WeightIt()`. Ignore the warnings you get.]{.underline}
+
+Let's first examine propensity.
+
+```{r}
+propensity_matching <- weightit(treat ~ age + I(age^2) + educ + I(educ^2) + black + hisp + married + nodegr + re74 + I(re74^2) + re75 + I(re75^2) + u74 + u75, 
+               method = "ps",
+               estimand = "ATT",
+               data = d_observed) 
+
+# View the summary 
+summary(propensity_matching)
+```
+
+The summary of `propensity_matching` reveals that the weights used in this sample range from 1-1 for our treated values (because we **do not** adjust for treated values). The weights used to adjust the control values, however, range from 0-83.97 (meaning that we have at least one control case that is seemingly-identical to a treatment case, but is not, and at least one control case that is aggressively antithetical to the treatment case and requires serious weighting).
+
+[Estimate the ATT.]{.underline}
+
+In order to estimate the ATT, we can create a linear model:
+
+```{r}
+att_model <- lm(re78 ~ treat, 
+                data = d_observed, 
+                weights = propensity_matching$weights)
+
+summary(att_model)
+```
+
+The ATT produced in this model is `1.139`, meaning that the average effect of receiving treatment (i.e., training) increased income by \$1,140.00. Importantly, our ATT is now **positive**, whereas the previous models estimated a **negative** treatment effect.
+
+[Check for covariate balance.]{.underline}
+
+To check the covariate balance, let's add in a love plot in order to better see what's going on with this data:
+
+```{r}
+love_plot(propensity_matching)
+```
+
+The love plot reveals a few things. First, almost all of the adjusted variables fall within a tenth of a percentile outside of the standard deviation on the Absolute Standardized Means Differences (ASMD) visualization. Second, despite the adjusted variables mapping almost-perfectly onto the acceptable range of adjustment—I'm looking at you, `u74`—for the ASMD graphic, there is a lot of messiness on the Kolmogorov-Smirnov Distance (KSD) visualization. Specifically, the distance between nearly every adjusted variable on the KSS graphic is outside of the range of acceptability.
+
+Thus, these graphics indicate to us that there are some adjustments that need to be made to our adjustments.
+
+## Exercise 7.1.6: Entropy Balancing
+
+[Estimate propensity scores and ATT weights using "entropy balancing."]{.underline}
+
+```{r}
+entropy_balance_mod <- weightit(treat ~ age + I(age^2) + educ + I(educ^2) + black + hisp + married + nodegr + re74 + I(re74^2) + re75 + I(re75^2) + u74 + u75, 
+               data = d_observed,
+               method = "ebal",
+               moments = 3,
+               estimand = "ATT")
+
+summary(entropy_balance_mod)
+```
+
+Similar to what we did in the previous exercise, the summary of `entropy_balance_mod` reveals that there is a consistently-applied weight of 1 to our treatment group and a range of 0-230.68 for our control group. The findings are similar to the results of the previous `WeightIt` output, as it indicates that there is at least one control group case that appears identical to a treatment group case and that there is at least one control case that needs serious adjusting.
+
+[Confirm that you've achieved balance on the means and the variances of the covariates.]{.underline}
+
+Let's check the covariate balancing with a final love plot.
+
+```{r}
+love_plot(entropy_balance_mod)
+```
+
+Better! The adjusted values in the ASMD are now all beautifully within the range of acceptable error, and while the KSD is still ugly, it's less of a mess than before.
+
+[Estimate the ATT.]{.underline}
+
+```{r}
+last_att_model <- lm(re78 ~ treat, 
+                data = d_observed, 
+                weights = entropy_balance_mod$weights)
+
+summary(last_att_model)
+```
+
+Lastly, the ATT produced in this model is `0.1744`, meaning that the average effect of receiving treatment is an increase in income by \$174.40. Again, our ATT is positive.
