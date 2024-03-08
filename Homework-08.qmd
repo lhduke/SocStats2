@@ -1,0 +1,300 @@
+---
+title: "Homework-08"
+format: html
+editor: visual
+author: L. Harvey
+error: TRUE
+---
+
+## Homework 08 
+
+Packages and set-up:
+
+```{r}
+library(tidyverse)
+library(WeightIt)
+library(cobalt)
+```
+
+## Exercise 8.1: Evaluating a Child Care Program 
+
+This dataset is taken from Gelman et al. (2020). The dataset contains measurements on the development of nearly 4500 children born in the 1980s.
+
+The dataset is described as follows: "A subset of 290 of these children received special services in the first few years of life, including high-quality child care (five full days a week) in the second and third years of life as part of a formal intervention, the Infant Health and Development Program (IHDP). These children were targeted because they were born prematurely, had low birth weight (less than or equal to 2500 grams), and lived in the eight cities where the intervention took place. Children in the sample who did not receive the intervention exhibited a more representative range of birth timing and birth weight.
+
+We want to evaluate the impact of this intervention on the children’s subsequent cognitive outcomes by comparing the outcomes for children in the intervention group to the outcomes in a comparison group of 4091 children who did not participate in the program. The outcome of interest is test score at age 3; this test is similar to an IQ measure, so we simplistically refer to these scores as IQ scores from now on" (Page 394-395).
+
+Now let's input the data:
+
+```{r}
+var_names <- c("momage", "b.marr", "momed", "work.dur", "prenatal", "cig", "booze", "sex", "first", "bw", "bwg", "preterm", "black", "hispanic", "white", "lths", "hs", "ltcoll", "college", "dayskidh", "st5", "st9", "st12", "st25", "st36", "st42", "st48", "st53", "st99", "income", "treat", "ppvtr.36")
+
+url <- "https://raw.githubusercontent.com/avehtari/ROS-Examples/master/Childcare/data/cc2.csv"
+
+d <- read_csv(url) |> 
+  select(all_of(var_names)) |> 
+  mutate(across(matches("st\\d{2}"), as.integer))
+
+glimpse(d)
+```
+
+Note: Our outcome variable is `ppvtr.36` (which is "test score at age 3").
+
+If we want to view the dictionary for the study:
+
+```{r}
+dict_url <- "https://raw.githubusercontent.com/avehtari/ROS-Examples/master/Childcare/data/datadict.txt"
+
+read_file(dict_url) |> 
+  writeLines()
+```
+
+## Exercise 8.1.1: Exclusion 
+
+Gelman et al. (2020) wrote, "We excluded the most severely low-birth-weight children (those at or below 1500 grams) from the sample because they are so different from the comparison sample."
+
+In your own words, answer the following:
+
+[Why did the authors decide to exclude these children? What problem could we encounter by not omitting them?]{.underline}
+
+The authors decided to exclude these children because they were viewed as being "so different" from the children included in the comparison group. One reason to explain why these babies were excluded could be because they fell outside of the region of common support and thus did not have matches against which they could be compared.
+
+The most obvious problem that we can face by omitting these babies is that dropping the "extreme" cases likely will dilute our treatment effect, meaning that our results will likely be less accurate than they could be.
+
+[Would *you* have excluded them from the dataset? Why?]{.underline}
+
+I would not have excluded the tots because doing so may skew our results (for the reason I indicated in the question above). Simply stated, it's never a good idea to cut data just to cut it, as doing so may inadvertently impact our results.
+
+## Exercise 8.1.2: Covariate Balancing 
+
+[Look at the variables. Which ones are you planning to use for covariate balancing? Justify your answer, but keep it short!]{.underline}
+
+Per Gelmen et al. (2020), the "IHDP intervention ... targeted lowbirth weight, pre-term children" and "provided high quality child care" for the first three years of the children's lives. Consequently, in order to balance the variables, there are certain variables that are more central to balancing than others.
+
+In order to balance the covariates, I will focus on the following variables:
+
+**Variables related to receiving treatment**
+
+The first covariates to balance are the ones most central to receiving treatment:
+
+1.  `bw` = The child's birthweight
+2.  `bwg` = The indicator for whether or not a child was born with a low birth weight
+3.  `preterm` = The number of weeks preterm the child was born
+4.  `st99` = The indicator for whether or not the family was living in a state served by the IHDP
+5.  `st5`, `st9`, `st12`, `st25`, `st36`, `st42`, `st48`, and `st53` = The indicator for the state where the household resides
+
+**Variables about the pregnancy**
+
+I also want to balance the variables that indicate more information about harm/risks that potentially occurred *during* the pregnancy:
+
+1.  `prenatal` = The indicator for whether or not the mother received prenatal care
+2.  `cig` = The indicator for whether or not the mother smoked cigarettes while pregnant
+3.  `booze` = The indicator for whether or not the mother drank alcohol while pregnant
+4.  `work.dur` = The indicator for whether or not the mother worked in the year before she gave birth
+
+**Variables about the mother**
+
+Lastly, I want to balance some of the demographic information included in the data:
+
+1.  `momage` = The mother's age at the time of giving birth
+2.  `momed` = The mother's education level at the time of giving birth
+
+## Exercise 8.1.3: Using `WeightIt`
+
+Having established the covariates on which we'll be focusing, let's get into the balancing process!
+
+[Use the `WeightIt` package and try to achieve balance before estimating the ATT for the effect of this child care program. You will have to do this three separate times, using 1) Propensity Scores 2) CBPS and 3) Entropy Balancing.]{.underline}
+
+**Propensity Score Balancing**
+
+```{r}
+treat_formula_1 <- "treat ~ bw + bwg + preterm + st99 + st5 + st9 + st12 + st25 + st36 + st42 + st48 + st53 + prenatal + cig + booze + work.dur + momage + I(momage^2) + momed"
+
+W1 <- weightit(as.formula(treat_formula_1), 
+               method = "ps", 
+               estimand = "ATT", 
+               data = d)
+
+summary(W1)
+
+love.plot(W1)
+```
+
+Huh. So, this first `love.plot` came out pretty clean in the first trial of balancing the propensity scores. `st53` kind of sucks, so let's see if a different version of the formula works better. In the second go-around of the propensity score formula, we cut out all of the states except for `st99` (the indicator of whether or not a family was living in a state that the IHDP was serving).
+
+```{r}
+treat_formula_2 <- "treat ~ bw + bwg + preterm + st99 + prenatal + cig + booze + work.dur + momage + I(momage^2) + momed"
+
+W2 <- weightit(as.formula(treat_formula_2), 
+               method = "ps", 
+               estimand = "ATT", 
+               data = d)
+
+summary(W2)
+
+love.plot(W2)
+```
+
+*Huh.* Funny enough, the covariates are now more out-of-whack than earlier (I'm looking at you, `preterm`).
+
+Let's keep pushing, though, and see if CBPS is kinder to us.
+
+**Covariate Balancing Propensity Score (CBPS)**
+
+```{r}
+CBPS1 <- weightit(as.formula(treat_formula_1), 
+                  method = "cbps", 
+                  estimand = "ATT", 
+                  data = d)
+
+summary(CBPS1)
+
+love.plot(CBPS1)
+```
+
+Again, `treat_formula_1` appears to be hanging in there! There is still a bit of wiggle in the visualization, with `preterm` and `momed` appearing to deviate the most from the balanced propensity scores.
+
+Just for fun, let's see what happens if we *don't* overfit the CBPS.
+
+```{r}
+CBPS2 <- weightit(as.formula(treat_formula_1), 
+                  method = "cbps", 
+                  estimand = "ATT", 
+                  over = FALSE, 
+                  data = d)
+
+summary(CBPS2)
+
+love.plot(CBPS2)
+```
+
+Oof. It got worse. Let us continue to overfit, then.
+
+**Entropy Balancing**
+
+Last but not least, let's try using entropy balancing to adjust these covariates.
+
+```{r}
+balance_beam <- weightit(as.formula(treat_formula_1), 
+                         data = d, 
+                         estimand = "ATT", 
+                         method = "ebal", 
+                         moments = 3)
+
+summary(balance_beam)
+
+love.plot(balance_beam)
+
+bal.plot(balance_beam, which = "both")
+```
+
+Rats! Trying to run this entropy balance generates an output where the "estimated weights do not balance the covariates," with a warning that "all weights are 'NA' or 0 in treatment group '0'." (Oh my goodness, look at this hideous balance plot!)
+
+Let's try it again with our other formula.
+
+```{r}
+balance_beam_2 <- weightit(as.formula(treat_formula_2), 
+                         data = d, 
+                         estimand = "ATT", 
+                         method = "ebal", 
+                         moments = 3)
+
+summary(balance_beam_2)
+
+love.plot(balance_beam_2)
+
+bal.plot(balance_beam_2, which = "both")
+```
+
+Still no cigar.
+
+Let's try another formula—this time, let's cut out some of the pregnancy risks.
+
+```{r}
+treat_formula_3 <- "treat ~ bw + bwg + preterm + st99 + prenatal + booze + momage + I(momage^2) + momed"
+
+balance_beam_3 <- weightit(as.formula(treat_formula_3), 
+                         data = d, 
+                         estimand = "ATT", 
+                         method = "ebal", 
+                         moments = 3)
+
+summary(balance_beam_3)
+
+love.plot(balance_beam_3)
+
+bal.plot(balance_beam_3, which = "both")
+```
+
+Damn, foiled again.
+
+How about version 4, which includes pregnancy risks and all of the states, but not the mothers' ages?
+
+```{r}
+treat_formula_4 <- "treat ~ bw + bwg + preterm + st99 + st5 + st9 + st12 + st25 + st36 + st42 + st48 + st53 + prenatal + cig + booze + work.dur + momed"
+
+balance_beam_4 <- weightit(as.formula(treat_formula_4), 
+                         data = d, 
+                         estimand = "ATT", 
+                         method = "ebal", 
+                         moments = 3)
+
+summary(balance_beam_4)
+
+love.plot(balance_beam_4)
+
+bal.plot(balance_beam_4, which = "both")
+```
+
+Last try—cutting out the states *and* work variables, this time.
+
+```{r}
+treat_formula_5 <- "treat ~ bw + bwg + preterm + st99 + prenatal + cig + booze + momage + I(momage^2) + momed"
+
+balance_beam_5 <- weightit(as.formula(treat_formula_5), 
+                         data = d, 
+                         estimand = "ATT", 
+                         method = "ebal", 
+                         moments = 3)
+
+summary(balance_beam_5)
+
+love.plot(balance_beam_5)
+```
+
+Nothing! If anything, the balance plot indicates that our imbalance is actually getting worse.
+
+### Lastly, let's find the ATT using one of these models. 
+
+Entropy balancing is out, but what can we use propensity scores or CBPS to tell us about the ATT?
+
+Let's first find the naive estimate of treatment (AKA, without applying weights)
+
+```{r}
+summary(lm(ppvtr.36 ~ treat, 
+           data = d))
+```
+
+The naive estimate of treatment is `6.086`.
+
+If we do apply weights (from the CBPS formula), our output is as follows:
+
+```{r}
+cbps_att <- lm(ppvtr.36 ~ treat, 
+               data = d, 
+               weights = CBPS1$weights)
+
+tidy(cbps_att, conf.int = TRUE)
+```
+
+Based off of the CBPS1 weights, the output indicates that receiving treatment increases IQ (or `ppvtr.36`) by 15.75 points.
+
+```{r}
+ps_att <- lm(ppvtr.36 ~ treat, 
+               data = d, 
+               weights = W1$weights)
+
+tidy(ps_att, conf.int = TRUE)
+```
+
+Based on the propensity score weights, our output is even less precise, estimating that receiving treatment increases `ppvtr.36` by *39.1* points, which is even less likely than the CBPS prediction.
