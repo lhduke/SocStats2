@@ -6,25 +6,26 @@ editor: visual
 author: L. Harvey 
 ---
 
-## Homework 09
+## Homework 09 (Revised 03/20)
 
 Homework 09 marks the end of an era!
 
-### Exercise 9.1.1: Loading the GSS 2022 Data 
+### Exercise 9.1.1: Loading the GSS 2022 Data
 
 [Load the GSS dataset for 2022 and choose one outcome variable and one "treatment" variable. They can be any two variables you want and the treatment can be either binary or continuous.]{.underline}
 
 ```{r}
 # Background Code 
-set.seed(973)
+
 library(gssr)
-gss2022 <- gss_get_yr(2022)
 library(tidyverse)
 library(marginaleffects)
 library(broom)
 library(WeightIt)
 library(MatchIt)
 library(cobalt)
+
+gss2022 <- gss_get_yr(2022)
 ```
 
 **Research Question:** Is there a causal relationship between having a college degree (treatment variable) and supporting affirmative action (outcome variable)?
@@ -70,21 +71,21 @@ naive_estimate <- lm(supports ~ bachelors_plus, data = d)
 tidy(naive_estimate)
 ```
 
-The naive estimate for this research question is that individuals who have at least a bachelor's degree have a predicted probability of being 4.96 percentage points more likely to support affirmative action than individuals without at least a bachelor's degree.
+The naive estimate for this research question is that individuals who have at least a bachelor's degree have a predicted probability of being 0.0496 percentage points more likely to support affirmative action than individuals without at least a bachelor's degree.
 
-### Exercise 9.1.2: Some Theory 
+### Exercise 9.1.2: Some Theory
 
 [Think very hard about the list of possible confounding variables that might affect this estimate.]{.underline}
 
 [Part One: Draw a DAG.]{.underline}
 
-![](Homework-09/HW #9 (DAG 2).png)
+![](Homework-09/HW%20#9%20(DAG%202).png)
 
 [Part Two: What is your estimand (ATE, ATT, and ATU)?]{.underline}
 
-For this research question, I'm focused on the ATT, because I want to explore the causal impact that completion of a college degree has on supportive attitudes towards others completing the same.
+For this research question, I'm focused on the ATT, because I want to explore the causal impact that completion of a college degree has on supportive attitudes towards others completing the same. I am interested in evaluating the group of individuals who were *already likely to get a college degree*, because I anticipate a) that they are qualitatively different than individuals who were unlikely to get a college degree, and that b) because of this dissimilarity between groups, there would be a difference in supportive attitudes towards affirmative action policies.
 
-### Exercise 9.1.3: Selecting Covariates 
+### Exercise 9.1.3: Selecting Covariates
 
 [Select the appropriate covariates in the GSS that allow for causal identification. Be careful when selecting these variables and make a note for any transformation you decide is adequate (i.e., coding a covariate to be binary).]{.underline}
 
@@ -100,10 +101,12 @@ e <- gss2022 |>
          conservative = if_else(polviews >= 4, 1L, 0L),
          educated_parents = pmax(padeg, madeg, na.rm = TRUE), 
          low_ses = if_else(class <= 2, 1L, 0L), 
-         high_ses = if_else(class >= 3, 1L, 0L)) |>
+         high_ses = if_else(class >= 3, 1L, 0L),
+         black = if_else(race == 2, 1L, 0L)) |>
   drop_na() |> 
+  ## dropped major1 because didn't know how to recode it
   select(bachelors_plus, degree, supports, affrmact, conservative, polviews, educated_parents,
-         madeg, padeg, low_ses, high_ses, class, age, major1)
+         madeg, padeg, low_ses, high_ses, class, age, race, black)
 ```
 
 The variables in dataframe `e` are recoded as follows:
@@ -140,51 +143,56 @@ The variables in dataframe `e` are recoded as follows:
 
 -   0 = Respondent does not have high SES
 
--   Please note: I realized that I actually coded `high_ses` and `low_ses` to do the same thing, which was screwing up my regression. Thus, I removed `high_ses` from the regression model.
+-   Please note: I realized that I actually coded `high_ses` and `low_ses` to be collinear, which was screwing up my regression. Thus, I removed `high_ses` from the regression model.
 
 [Are there any variables missing from the DAG you drew earlier?]{.underline}
 
-The DAG was modified throughout this homework assignment to account for any variables that were missing (e.g., I originally did not include `class` on the DAG, then later realized it was an important variable that count feasibly impact `polviews`, etc.). The `educ` variable was originally included, but was later cut from the DAG. This is because both `educ` and `degree` contain the same information, and I had concerns that inclusion of both variables may "break" the regression model I wanted to create.
+The DAG was modified throughout this homework assignment to account for any variables that were missing (e.g., I originally did not include `class` on the DAG, then later realized it was an important variable that could feasibly impact `polviews`, etc.). The `educ` variable was originally included, but was later cut from the DAG. This is because both `educ` and `degree` contain the same information, and I had concerns that inclusion of both variables may "break" the regression model I wanted to create.
 
 Note also that there is no direct causal relationship identified between `race` and `bachelors degree`. This is because assumptions made in the DAG assert that there is not a causal relationship between one's race and obtaining a degree (i.e., being white does not *cause* one to get a degree, but it is a contributing factor in terms of whites having greater accessibility to structural advantages necessary to enter universities). As it would be remiss to act as though race had no impact on one's ability to obtain a college degree, `race` is thus adjusted for in the regression.
 
-### Exercise 9.1.4: Using Regression on `T` and `Y` 
+### Exercise 9.1.4: Using Regression on `T` and `Y`
 
 [Use regression to get the effect of $T$ on $Y$.]{.underline}
 
 ```{r}
-regression <- glm(supports ~ bachelors_plus + conservative + educated_parents + 
-                  low_ses + age + I(age^2) + major1, 
+naive <- lm(supports ~ bachelors_plus, data = e)
+tidy(naive)
+
+regression <- glm(supports ~ bachelors_plus * (conservative + educated_parents + 
+                  low_ses + age + I(age^2) + black), 
                   data = e, 
                   family = binomial)
-tidy(regression)
 ```
+
+(Note: Adding in interactions, as opposed to listing the covariates as being additive, indicates that there may be heterogeneous treatment effects.)
 
 Now let's calculate the ATE and the ATT:
 
 ```{r}
 ate <- avg_slopes(regression, 
-                  variables = "bachelors_plus")
+                  variables = "bachelors_plus", type = "response")
 tidy(ate)
 
 att_and_atu <- avg_slopes(regression, 
                   variables = "bachelors_plus", 
                   by = "bachelors_plus")
+
 tidy(att_and_atu)
 ```
 
 As a recap, here are all of the numbers compared against our naive estimate from earlier:
 
-$Naive = 0.0496$ \
-$ATE = 0.0149$ \
-$ATU = 0.0138$ \
-$ATT = 0.0151$
+$Naive = 0.0757$\
+$ATE = 0.03995$\
+$ATU = 0.00694$\
+$ATT = 0.04677$
 
-The $ATE = 0.0149$. If we break out the `bachelors_plus` variable into `bachelors_plus == 0` and `bachelors_plus == 1`, respectively, we find that the $ATU = 0.0138$, while our star of the show, the $ATT = 0.0151$.
+The $ATE = 0.03995$. If we break out the `bachelors_plus` variable into `bachelors_plus == 0` and `bachelors_plus == 1`, respectively, we find that the $ATU = 0.00694$, while our star of the show, the $ATT = 0.04677$.
 
-Importantly, interpreting our $ATT$ means that individuals who have at least a bachelor's degree are 0.0151 percentage points more likely to support affirmative action than individuals without at least a bachelor's degree.
+Importantly, interpreting our $ATT$ means that individuals who have at least a bachelor's degree are 0.04677 percentage points more likely to support affirmative action than individuals without at least a bachelor's degree.
 
-### Exercise 9.1.5: Weighting 
+### Exercise 9.1.5: Weighting
 
 [Spend some time trying to achieve covariate balancing (and include a "Love plot"). Use any method that feels appropriate (i.e., propensity scores, CBPS, entropy balancing). What is the effect of `T` on `Y`?]{.underline}
 
@@ -192,7 +200,7 @@ Okay, now let's try to balance our covariates using propensity scores.
 
 ```{r}
 propensity_formula <- "supports ~ bachelors_plus + conservative + educated_parents + 
-                       low_ses + age + I(age^2) + major1"
+                       low_ses + age + I(age^2) + black"
 
 W1 <- weightit(as.formula(propensity_formula), 
                method = "ps", 
@@ -204,42 +212,42 @@ summary(W1)
 love.plot(W1)
 ```
 
-Creating a love plot for `W1` showed us that nearly all of our covariates were balanced. The variable with the most "wiggle" is `educated_parents` (which makes sense, given that that variable was a combination of two different variables and thus more difficult to balance).
+Creating a love plot for `W1` showed us that nearly all of our covariates were balanced. The variables with the most "wiggle" appeared to be `educated_parents` (which makes sense, given that that variable was a combination of two different variables and thus more difficult to balance) and `black`.
 
 Now let's again compare the effect of $T$ on $Y$:
 
 ```{r}
-balanced_model <- glm(supports ~ bachelors_plus + conservative + educated_parents + 
-                  low_ses + age + I(age^2) + major1, 
-                  data = e, 
+balanced_model <- lm(supports ~ bachelors_plus,  # Do not need to include variables here because
+                  data = e,                      ## the variables are included in the weights
                   weights = W1$weights)
 
-tidy(balanced_model, conf.int = TRUE)
+tidy(balanced_model, conf.int = TRUE) |> 
+  filter(term == "bachelors_plus")
 ```
 
-After balancing via propensity scores, we now find that the effect of having at least a bachelor's degree ( $T$ ) increases support for affirmative action ( $Y$ ) by 0.00259 percentage points. This is a **HUGE** change from our original anticipated (and, importantly, *unbalanced*) effect of $T$ on $Y$ in Exercise 9.1.4, which was 0.0881.
+After balancing via propensity scores, we now find that the effect of having at least a bachelor's degree ( $T$ ) increases support for affirmative action ( $Y$ ) by 0.0259 percentage points. This is a **HUGE** change from our original anticipated (and, importantly, *unbalanced*) effect of $T$ on $Y$ in Exercise 9.1.4, which was 0.0757.
 
-### Exercise 9.1.6: Double Robustness 
+### Exercise 9.1.6: Double Robustness
 
 [Combining weighting and regression, what is the effect of `T` on `Y`?]{.underline}
 
 ```{r}
-double_robustness <- glm(supports ~ bachelors_plus + conservative + educated_parents + 
-                        low_ses + age + I(age^2) + major1, 
-                        data = e, 
-                        family = binomial, 
-                        weights = W1$weights)
+double_robustness <- lm(supports ~ bachelors_plus + conservative + educated_parents + 
+                  low_ses + age + I(age^2) + black, 
+                  data = e, 
+                  weights = W1$weights)
 
-tidy(double_robustness, conf.int = TRUE)
+tidy(double_robustness, conf.int = TRUE) |> 
+  filter(term == "bachelors_plus")
 ```
 
-After making our model doubly-robust, the effect of $T$ on $Y$ is now 0.0104.
+After making our model doubly-robust, the effect of $T$ on $Y$ is now 0.004336.
 
 As a recap:
 
-1.  The original, unadjusted effect of $T$ on $Y$ was 0.0881
-2.  The second, weighted effect of $T$ on $Y$ was 0.0025
-3.  The last, doubly-robust effect of $T$ on $Y$ was 0.0104
+1.  The original, unadjusted effect of $T$ on $Y$ was 0.0757
+2.  The second, weighted effect of $T$ on $Y$ was 0.0259
+3.  The last, doubly-robust effect of $T$ on $Y$ was 0.004336
 
 ### Exercise 9.1.7: Explanations
 
@@ -247,10 +255,10 @@ As a recap:
 
 The research question for this homework assignment was as follows: "Is there a causal relationship between having a college degree (treatment variable) and supporting affirmative action (outcome variable)?" My original hypothesis was that individuals with at least a bachelor's degree would demonstrate greater support for affirmative action than individuals without a college degree. This hypothesis comes from related literature on how achievement and perceptions of merit impacts support for affirmative action policies (Oyinlade [2013](https://journals.sagepub.com/doi/full/10.1177/2158244013516156), Aberson [2007](https://onlinelibrary.wiley.com/doi/10.1111/j.1559-1816.2007.00266.x)).
 
-The research question included the following variables: The respondent's personal political ideology (`conservative`), the education levels of the respondent's parents (as shown in the `educated_parents` variable, which was comprised of respondents's reports of the highest level of education their mother and father received), whether or not the respondent had a low socioeconomic status (`low_ses`), the age of the respondent (`age`), the age of the respondent squared (using `age^2` to indicate non-linearity of age), and the major that the respondent studied in college (`major1`). In order to better interpret these complex, overlapping variables indicated in the research question, I recoded the majority of them into binary variables (for a further variable breakdown, please see Exercise 9.1.3).
+The research question included the following variables: The respondent's personal political ideology (`conservative`), the education levels of the respondent's parents (as shown in the `educated_parents` variable, which was comprised of respondents's reports of the highest level of education their mother and father received), whether or not the respondent had a low socioeconomic status (`low_ses`), the age of the respondent (`age`), the age of the respondent squared (using `age^2` to indicate non-linearity of age), the respondent's race (`black`), and the major that the respondent studied in college (`major1`). In order to better interpret these complex, overlapping variables indicated in the research question, I recoded the majority of them into binary variables (for a further variable breakdown, please see Exercise 9.1.3). Because `major1` was a dumpster fire to recode, it was dropped from the regression models and efforts to balance same.
 
-In order to understand the effect that having a bachelor's degree had on attitudes supporting or opposing affirmative action, I first found the original, unadjusted effect of $T$ on $Y$, which was 0.0881. This unadjusted output indicated that individuals with at least a bachelor's degree demonstrated 0.0881 percentage points more support for affirmative action policies than individuals without at least a bachelor's degree.
+In order to understand the effect that having a bachelor's degree had on attitudes supporting or opposing affirmative action, I first found the original, unadjusted effect of $T$ on $Y$, which was 0.0757. This unadjusted output indicated that individuals with at least a bachelor's degree demonstrated 0.0757 percentage points more support for affirmative action policies than individuals without at least a bachelor's degree.
 
-Having established 0.0881 as the baseline for the unadjusted estimate of the treatment effect, I then balanced the covariates on their propensity scores. After this first balance, I created a generalized linear model of the propensity-score-balanced covariates to find the effect of $T$ on $Y$, which was 0.0025. Lastly, I used double-robustness of both weighting and regression to find the final balanced effect of $T$ on $Y$ to be 0.0104.
+Having established 0.0757 as the baseline for the unadjusted estimate of the treatment effect, I then balanced the covariates on their propensity scores. After this first balance, I created a generalized linear model of the propensity-score-balanced covariates to find the effect of $T$ on $Y$, which was 0.0259. Lastly, I used double-robustness of both weighting and regression to find the final balanced effect of $T$ on $Y$ to be 0.004336.
 
-Summarily, the double-robustness check indicates that individuals possessing at least a bachelor's degree are 0.0104 percentage points more likely to support affirmative action than individuals without at least a bachelor's degree.
+Summarily, the double-robustness check indicates that individuals possessing at least a bachelor's degree are 0.004336 percentage points more likely to support affirmative action than individuals without at least a bachelor's degree.
