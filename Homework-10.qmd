@@ -1,0 +1,298 @@
+---
+title: "Homework-10"
+format: html
+editor: visual
+author: L. Harvey 
+date: 25 March 2024 
+error: TRUE 
+---
+
+## Homework-10
+
+Background Code:
+
+```{r}
+library(tidyverse)
+library(panelr)
+library(gapminder)
+library(ggeffects) 
+library(lme4)
+```
+
+### Exercise 10.1: Reshaping Data
+
+Take a look at the `gapminder` dataset in the `gapminder` package. The following chunk of code uses the `pivot_wider()` function to turn this dataset into wider form.
+
+```{r}
+gap_wide <- gapminder::gapminder |> 
+  select(continent, country, year, lifeExp, gdpPercap) |> 
+  pivot_wider(
+    names_from = year, 
+    values_from = c(lifeExp, gdpPercap), 
+    names_sep = ""
+  )
+
+gap_wide
+```
+
+For this next portion of the homework, keep the functions `long_panel()` and `widen_panel()` in mind.
+
+[Use the `panelr` package to turn the dataset back to its original long form and save it as `gap_long`]{.underline}.
+
+```{r}
+gap_long <- long_panel(
+  data = gap_wide, 
+  id = "country", 
+  wave = "year", 
+  begin = 1952, 
+  end = 2007, 
+  periods = seq(1952, 2007, by = 5)
+)
+
+gap_long
+```
+
+!!! It works!
+
+[Use the `panelr` package to turn the `gap_long` into `gap_wide` (i.e., Replicating what ACA did earlier with `pivot_wider()`).]{.underline}
+
+```{r}
+gap_wide <- gap_long |> 
+  widen_panel()
+
+gap_wide
+```
+
+Wahoo!
+
+### Exercise 10.2: Graphing Visualizations
+
+[[Slide 33]{.underline}](https://github.com/vaiseys/soc-stats-2/blob/main/slides/ldar-slides.pdf) [contains a very simple visualization that uses the `line_plot()` function. For this portion of the homework, try your best to make a similar graph to the `gapminder` dataset, with `year` on the x-axis and `lifeExp` on the y-axis for a random subset of 10 countries.]{.underline} (Note: Use `ggplot2`!)
+
+(Let's build a graph from the random selection of `country` and the other thingies we need to include.
+
+```{r}
+set.seed(973)
+
+# From SV's code: 
+line_plot(data = gap_long, 
+          var = lifeExp, 
+          subset.ids = TRUE, 
+          n.random.subset = 10)
+
+# Creating new dataframe: 
+country_sample <- sample(unique(gap_long$country), 10)
+graph_subset <- gap_long |> 
+  filter(country %in% country_sample)
+View(graph_subset)
+
+# Time to plot it 
+ggplot(data = graph_subset, 
+       mapping = aes(x = year, 
+                     y = lifeExp, 
+                     color = country)) + 
+  geom_line()
+```
+
+### Exercise 10.3: Calculating ICC
+
+[Steve introduced the measurement of "intraclass correlation" (or ICC) in class this week. What is the ICC for `lifeExp`, `pop`, and `gdpPercap` in the `gapminder` dataset?]{.underline}
+
+As a reminder: We use ICC when examining variance "between" or "within" observations. That being said, let's make sense of these columns.
+
+```{r}
+library("lme4")
+# install.packages("Matrix")
+library("Matrix")
+
+lifeExp_icc <- lmer(lifeExp ~ (1 | country),
+             data = gap_long,
+             REML = FALSE)
+
+summary(lifeExp_icc)
+```
+
+If we add together the output:
+
+```{r}
+119.40 / (119.40 + 47.36)
+```
+
+The ICC for `lifeExp` is 0.7159.
+
+```{r}
+pop_icc <- lmer(pop ~ (1 | country),
+             data = gap_long,
+             REML = FALSE)
+
+summary(pop_icc)
+```
+
+Adding the output:
+
+```{r}
+1.021e+16 / (1.021e+16  + 1.055e+15)
+```
+
+The ICC for `pop` is 0.9063.
+
+```{r}
+gdp_icc <- lmer(gdpPercap ~ (1 | country),
+             data = gap_long,
+             REML = FALSE)
+
+summary(gdp_icc)
+```
+
+Adding the output:
+
+```{r}
+69177620 / (69177620 + 27934767)
+```
+
+The ICC for `gdpPercap` is 0.7123.
+
+### Exercise 10.4: Creating Models
+
+Use the `WageData` from the `panelr` package. You don't need to make a `panel_data` version of `WageData` for this analysis, but you can if you'd like (we'll use it later).
+
+[Estimate the following mixed models using `lmer()` with maximum likelihood (REML = FALSE). The models are as follows:]{.underline}
+
+-   Log wage as a function of college and linear time
+
+-   Log wage as a function of college and linear time, plus a random slope on time
+
+-   Log wage as a function of college and linear time, but with time as a quadratic
+
+**ACA Code:**
+
+```{r}
+data("WageData", package = "panelr")
+
+WageData <- WageData |> 
+  mutate(
+    college = if_else(ed >= 16, 1L, 0L),  # College variable
+    t0 = t - 1                            # Start time at 0
+  )
+```
+
+#### Log Wage as a Function of College and Linear Time
+
+```{r}
+linear_time <- lmer(lwage ~ college + t0 + (1 | id),
+             data = WageData,
+             REML = FALSE)
+
+summary(linear_time)
+```
+
+#### Log Wage as a Function of College and Random-Slope Time
+
+```{r}
+slopey_time <- lmer(lwage ~ college + t0 (t0 + 1 | id),
+             data = WageData,
+             REML = FALSE)
+
+summary(slopey_time)
+```
+
+#### Log Wage as a Function of College and Quadratic Time
+
+```{r}
+quad_time <- lmer(lwage ~ college + t0 (1 + I(t0^2) + t0 | id),
+             data = WageData,
+             REML = FALSE)
+
+summary(quad_time)
+```
+
+[After estimating these models, compare their BIC values using `BIC()`. Select the best model (here, the model with the lowest BIC), then do the following:]{.underline}
+
+-   Report the estimated effect of college on log wages given the data and model. You can get this using `tidy()`, `summary()`, or any other function you prefer.
+
+-   Use `ggpredict() --> plot()` to plot predictions for a sample of nine individuals over time
+
+    -   As a side note: [This page](https://strengejacke.github.io/ggeffects/reference/ggpredict.html) was super helpful in understanding the arguments in `ggpredict()`!
+
+#### Comparing the BICs
+
+```{r}
+BIC(c(linear_time, slopey_time, quad_time))
+```
+
+The model with the lowest BIC is `quad_time`! (Question: Is this because this model has the greatest number of interaction terms? So the more interactions there are, the better the fit of the model?)
+
+#### Sample Predictions
+
+Lastly, let's create a prediction for a sample of nine individuals over time.
+
+```{r}
+set.seed(973)
+
+ggpredict(model = quad_time, 
+          terms = c("t", "id", "college"), 
+          type = "random") |> 
+  plot()
+```
+
+### Scratch Pad
+
+Errors are valuable, and I made a lot of them. This section is mostly for my reference, so that I can figure out what the hell I did wrong in different iterations of my code.
+
+Below, find the errors / my broken code.
+
+From Exercise 10.2: Trying to build a new dataframe that includes both the existing columns we need from `gap_long` *and* the randomized column I created with the list of ten countries.
+
+```{r}
+# First, let's make the random subset of ten countries 
+set.seed(973)
+country_sample <- gap_long[sample(1:nrow(gap_long), 10), "country"]
+country_sample
+
+country_sample_df <- gap_long |> 
+  select(year, lifeExp, country) |> 
+  mutate(sampled_countries = country_sample) |> 
+  seq(max(length(year), length(lifeExp), length(country_sample))
+      
+country_sample_df <- gap_long |> 
+  select(year, lifeExp, country) |> 
+  mutate(sampled_countries = country_sample) |> 
+  seq(1, max(length(year), length(lifeExp), length(country_sample))
+      
+country_sample_df <- gap_long |> 
+  select(year, lifeExp, country) |> 
+  mutate(sampled_countries = country_sample) |> 
+  mutate(seq_column = seq(1, max(n_distinct(year), n_distinct(lifeExp), n_distinct(country_sample))))
+      
+View(country_sample_df)
+
+line_plot(data = country_sample, 
+          var = lifeExp, 
+          subset.ids = TRUE, 
+          n.random.subset = 10)
+
+# Okay, take two. First, let's make the random subset of ten countries 
+set.seed(973)
+country_sample <- gap_long[sample(1:nrow(gap_long), 10), "country"]
+country_sample
+
+# Can we build a new column like this? 
+country_df <- gap_long |> 
+  add_column(max(length(country_sample)))
+View(country_df)
+
+# Hmm, not quite. How can we get it to only select the ten random countries? 
+country_df <- country_sample |> 
+  add_column(.data = gap_long, 
+             colnames(year, lifeExp, country))
+### Why isn't this working? 
+
+# Trying again to create a new dataframe: 
+country_sample <- gap_long[sample(1:nrow(gap_long), 10), "country"]
+
+country_df_please <- gap_long |> 
+  left_join(distinct(country_sample))
+
+View(country_df_please)
+# Why is this producing 1704 observations of 5 variables..? 
+```
