@@ -1,0 +1,224 @@
+---
+title: "Homework-11"
+format: html
+editor: visual
+author: L. Harvey 
+date: 8 April 2024
+error: TRUE 
+---
+
+## Homework #11
+
+### Exercise 11.1: Making Assumptions
+
+[In the "Event Studies" chapter, we estimated the effect of something that occurs at a specific time by just comparing the before-event to the after-event (without really using a control group). What assumption is made by no-control-group studies that we don't have to make with difference-in-differences?]{.underline}
+
+In the studies without a control group, we assume that the trend "parallel trend" will hold. Per NHK, the "parallel trend" assumption assumes that, "if no treatment had occurred, the difference between the treated group and the untreated group would have stayed the same" in both the pre-treatment and post-treatment period. This is a counterfactual assumption, which makes it inherently unobserveable.
+
+When making a difference-in-difference (DID) assumption, however, we use the control group as our point of reference. This means that our parallel trend assumption doesn't have to hold, and we can observe the impact that treatment has on both the treatment *and* the control group over time.
+
+### Exercise 11.2: Multiple Choice
+
+[Which of the following potential back doors is controlled for by comparing the treated group to a control group?]{.underline}
+
+a\. The treated group may be following a trend, unique to the group, that would make the outcome change from before-treatment to after-treatment anyway\
+b. There may be events affecting everyone that would change the outcome from before-treatment to after-treatment anyway\
+c. There may be differences in typical outcome levels between the treated group and the untreated group\
+d. The decision to treat the treated group, rather than some other group, may be based on factors that are related to the outcome
+
+**The answer is B) There may be events affecting everyone that would change the outcome from before-treatment to after-treatment anyway.**
+
+### Exercise 11.3: Comparing Treatment and Control Groups
+
+[Consider a treatment and control group. Looking only at the pre-treatment period, the two groups have exactly the same outcomes (i.e., zero gap between them in each period).]{.underline}
+
+[**Part A:** Despite having exactly the same outcomes pre-treatment, it happens to be the case that parallel trends is violated for these two groups. How is this possible? Explain what it means for parallel trends to be violated in this case, or give an example of how it could be violated.]{.underline}
+
+As briefly mentioned in exercise 11.1, the "parallel trends" assumption asserts that if no treatment is present, that the trends between the control and treated group will be parallel to one another. This assumption could be broken if there are other variables (aside from treatment) that impact the trends on either group. Alas, there are always going to be unobserveable variables that have the potential to bugger up our data.
+
+[**Part B:** If we estimate the causal effect in this case using difference-in-differences, even though parallel trends is violated, how much would our effect be off by? (Note: You won’t be able to give a specific number).]{.underline}
+
+If we estimate the causal effect in this exercise through difference-in-differences, we could either over- or -underestimate our effect. This is because we can no longer think that the differences between pre- and post-treatment are parallel, which means that our estimated effect would be inaccurate (and, unfortunately, it could be inaccurate either as an overestimate or an underestimate!).
+
+### Exercise 11.4: Evaluating the Graph 
+
+[Consider the below graph showing the average outcome for treated and control groups in the lead up to treatment (indicated by the dashed line) and also after treatment.]{.underline}
+
+![](images/Screenshot 2024-04-08 at 7.04.11 PM.png){width="330"}
+
+[**Part A:** Based on the prior trend, does it seem likely that parallel trends hold in this instance?]{.underline}
+
+Based on the trend, it does not seem likely that parallel trends hold in this instance. Rather, both lines appear to converge with one another and *approach* parallel slopes around the time-period-6 mark.
+
+[**Part B:** If we estimate the difference-in-differences anyway, are we likely to overestimate the actual causal effect, underestimate it, or get it right (on average)?]{.underline}
+
+On average, if we estimate the DID anyway, we would probably overestimate the "true" causal effect of treatment.
+
+### Exercise 11.5: Covid Scenario 
+
+[In mid-2020, during the COVID-19 pandemic, different countries pursued different courses of action. Some locked down fully, imposing harsh penalties to most people for leaving the house outside certain proscribed times. Some were looser and only suggested staying at home, and some had hardly any restrictions at all. You notice that COVID rates tend to spike dramatically in different countries at seemingly-random times, and want to know if certain restrictions helped.]{.underline}
+
+[From March through May 2020, US and Canada COVID case rates followed similar trends (US rates were higher, but the trends were similar). You want to look at the effect of COVID restrictions enacted in Canada in late May 2020 on case rates. Is DID (with the US as a control group) a good way to estimate this effect? If not, what concerns would you have about this research design?]{.underline}
+
+Using DID to compare the Covid rates between the USA and Canada *could* work, but only if the two countries are identical to one another in literally every other regard. Other variables that are important to keep in mind if using the USA as the control group include: Did the countries enact the same level of restrictions? Did they do so at the same time? What penalties did the countries impose for breaking lock-down? etc. Failure to hold these variables (and others not listed) constant between countries means that the USA could *not* be used as an accurate control group for DID comparison.
+
+### Exercise 11.6: Calculating the DID 
+
+[Consider the below table of mean outcomes, and calculate the difference-in-difference effect of treatment. Write out the equation you used to calculate it (i.e., Show how the four numbers in the table are combined to get the estimate).]{.underline}
+
+|               | Before | After |
+|---------------|--------|-------|
+| **Treated**   | 5      | 9     |
+| **Untreated** | 6      | 7.5   |
+
+The DID estimate is calculated by comparing the difference in treated - the difference in untreated. Thus, we can rewrite this table as follows:
+
+1.  Before-After difference in outcome for the treatment group: 9 - 5 = 4
+2.  Before-After difference in outcome for the control group: 7.5 - 6 = 1.5
+3.  DID estimate: 4 - 1.5 = 2.5
+
+**Thus, the DID estimate is 2.5.**
+
+### Exercise 11.7: Power to the People 
+
+[You are planning to estimate whether voter-protection laws increase voter turnout. You note that, in 2015, a lot of new voter-protection laws were enacted in some provinces but not in others. Conveniently, no new laws were enacted in 2012, 2014, or 2016, so you decide to use 2012 and 2014 as your “before” periods and 2016 as “after."]{.underline}
+
+[**Part A:** Which of the following best describes what you'd want to regress state-and-year level "voter turnout" measures on?]{.underline}
+
+a\. An indicator for whether the state is treated, and an indicator for whether the year is 2016.\
+b. A set of fixed effects for state, and a set of fixed effects for year.\
+c. An indicator for whether the state is treated, a set of fixed effects for year, and an indicator for whether the state is currently treated.\
+d. A set of fixed effects for state, and for year, and an interaction between “is 2016” and “is a treated state."\
+e. This design should not be estimated using a regression.
+
+**The answer is C) An indicator for whether the state is treated, a set of fixed effects for year, and an indicator for whether the state is currently treated.**
+
+[**Part B:** Unless you chose the final option in the previous question, specify which coefficient in that regression would give you the DID estimate.]{.underline}
+
+The coefficient that would provide the DID estimate would be the estimate for whether the state is currently treated.
+
+### Exercise 11.8: Describing TWFE DID Estimators 
+
+[In your own words, describe what is the “two-way fixed effects difference-in-difference estimator.” What does this model assume about the effect of some treatment over time? (Hint: Re-read [this](https://theeffectbook.net/ch-DifferenceinDifference.html#long-term-effects).)]{.underline}
+
+The "two-way fixed effects difference-in-difference estimator" (or TWFE DID estimator, for short) assumes two "fixed" (meaning holding something constant) values. The value for time is fixed, as is the group. The biggest takeaway of the TWFE model is that it assumes that the effect of time on treatment is **linear**.
+
+### Exercise 11.9: Evaluating the Graph (Part 2!) 
+
+[Consider the below graph with estimates from a dynamic difference-in-differences model for a treatment that occurs between periods 4 nd 5, with 95% confidence intervals shown.]{.underline}
+
+![](images/Screenshot 2024-04-08 at 7.14.24 PM.png){width="409"}
+
+[**Part A:** What about this graph might make us concerned about our identification assumptions?]{.underline}
+
+This graph is a little funky. Most notably, the treated and untreated groups start with two different intercepts and their slopes bounce around over time, which indicates to us that the "parallel trends assumption" referenced earlier probably doesn't hold.
+
+[**Part B:** Ignoring any concerns we have, what would we say is the effect of treatment on Y in this case? (Note that the height of the line in period 5 is about 3, in period 6 is about 1, and in period 7 is about 5).]{.underline}
+
+Ignoring the observation that the parallel trends assumption is busted in the above graph, we can see that the effect of Y in this case decreases from time 1 to time 4, then increases from time 4 to time 5, then decreases again from time 5 to time 7. Thus, we can likely assume that the effect of Y decreases over time.
+
+### Exercise 11.10: All About da Bread 
+
+#### **Part One: Covid Bread** 
+
+[In this assignment we will be walking through a very simple application of difference-in-differences that comes from Peter Nencka. In particular, it seemed that the beginning of the COVID-19 pandemic led to a brief craze for homemade sourdough bread, as people had to stay home, and stores were out of yeast (sourdough can be made at home using yeast from the air and does not require store-bought yeast). We will be estimating whether COVID lockdowns actually increased interest in sourdough bread,]{.underline}
+
+[We will be measuring interest in sourdough bread using Google Trends data in the USA. Google Trends tracks the popularity of different search terms over time. We will be comparing the popularity of the search term “sourdough” against the control groups: the search terms “cereal,” “soup,” and “sandwich,” the popularity of which we suspect might not have been meaningfully affected by COVID lock-downs.]{.underline}
+
+From ACA's homework, here's the data:
+
+```{r}
+library(tidyverse)
+
+url <- "https://raw.githubusercontent.com/NickCH-K/TheEffectAssignments/main/sourdough_trends.csv"
+
+sr <- read_csv(url) |> 
+  select(date, keyword, hits) |> 
+  mutate(
+    date = as.Date(date),
+    keyword = factor(keyword)
+  )
+
+glimpse(sr)
+```
+
+#### **Part Two:** Making a Line Graph 
+
+[Make a line graph with `date` on the x-axis and `hits` on the y-axis, with a separate line for each `keyword`. Also add a vertical line for the “start of the pandemic” which we’ll decide for our purposes is March 15, 2020.]{.underline}
+
+```{r}
+library(ggplot2)
+
+ggplot(data = sr,
+       mapping = aes(x = as.Date(date), 
+                     y = hits,
+                     color = keyword)) +
+      geom_line() +
+      geom_vline(xintercept = as.Date("2020-03-15"))
+```
+
+!!! Look how pretty!
+
+#### Part Three: Graph Analysis 
+
+[Looking at your graph, comment on (a) whether it looks like the lockdown had an effect on the popularity of sourdough, (b) the shape that effect takes (i.e. is it a permanent increase in popularity? Temporary?), (c) whether you might be concerned about any of the control groups we’ve chosen.]{.underline}
+
+**Point A:** Lockdown appears to have had a small spiking effect on the popularity of sourdough bread. Specifically, there is an overall positive trend from April to around June wherein the bread became more popular. By the end of June, however, sourdough bread's popularity began to decline.
+
+**Point B:** As mentioned in point A, the shape of this effect is temporary. Sourdough's popularity increases during the early stages of lockdown, then decreases until it approaches (approximately) pre-lockdown levels.
+
+**Point C:** I'm not crazy about using any of the groups as the control group, mostly because the lines of each of the groups (except for you, cereal) appear to converge and break the assumption of the parallel trends.
+
+#### Part Four: The "Treated" Indicator 
+
+[Create a “Treated” indicator that’s equal to 1 for sourdough and 0 otherwise (or True/False, either way).]{.underline}
+
+```{r}
+indicator <- sr |> 
+  filter(date <= as.Date("2020-03-15")) |>      # Because 03/15/20 == Treatment started 
+  mutate(Treated_Indicator = "sourdough", 
+         Date >= as.Date("2020-01-01"))         # Wherein 01/01/20 is the placebo date 
+```
+
+[Do a test of whether the prior trends (keeping March 15 as the “treatment date”) differ between the treated and control groups, using a linear trend and doing a statistical significance test at the 95% level.]{.underline}
+
+```{r}
+trend_mod <- feols(hits ~ Treated_Indicator | keyword + date, 
+                   data = indicator)
+
+summary(trend_mod)
+```
+
+[Then, if you were concerned about any of the control groups in question 3c, drop any you were concerned about (and keep them dropped for the rest of the assignment) and rerun the test. Then, write a line commenting on whether you can reject equal prior trends in your model(s).]{.underline}
+
+(Clarify this Q with ACA—not sure how to determine this!)
+
+#### **Part Five: Working with `Month`**
+
+[Create a `month` variable by shifting the `date` variable back 15 days (so that the treatment day is the first day of the month) and then taking the month of the resulting date. Also create an `After` variable equal to 1/0 (or True/False) if the date is March 15 or afterwards.]{.underline}
+
+```{r}
+date_round_two <- sr |> 
+  filter(date <= as.Date("2020-03-01")) |>      # Now 03/01/20 == Start date  
+  mutate(Treated_Indicator = "sourdough", 
+         Date >= as.Date("2020-03-15"))         # Wherein 01/01/20 is the placebo date 
+```
+
+[Then, take a look at the values of `month` you get and how they line up with `date`, and subtract a number from `month` so that the last period just before treatment (Feb 16-Mar 14) is 0. (Also, change the Jan 1-14 month so it’s one less than the Jan 15-Feb 14 month). (Hint: You can then use `-lubridate::days()` to subtract days from the date, and `lubridate::month()` to get the month from the date.)]{.underline}
+
+```{r}
+
+```
+
+[Then, use two-way fixed effects to estimate the difference-in-difference estimate of the effect of lock-down on sourdough popularity with `keyword` and `month` fixed effects, and standard errors clustered at the `keyword` level.]{.underline}
+
+```{r}
+# From ACA's GH: 
+dynamic <- feols(
+  hits ~ i(month, Treated, ref = 0) | keyword + month,
+  cluster = "keyword",
+  data = sr
+)
+
+coefplot(dynamic)
+```
